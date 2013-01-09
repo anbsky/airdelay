@@ -2,15 +2,20 @@
 
 from __future__ import print_function
 from redisco import models
+import redis
 
 
 class Airport(models.Model):
     code = models.Attribute(required=True)
-    title = models.Attribute(required=True)
+    title = models.Attribute(required=False)
 
     @property
     def flights(self):
         return False
+
+    class Meta:
+#        indices = ('full_name',)
+        db = redis.Redis(host='localhost', db=9)
 
 
 class Status(object):
@@ -33,21 +38,37 @@ class Status(object):
 
 
 class FlightStatus(Status):
-    _list = 'SCHEDULED', 'DELAYED', 'DEPARTED', 'LANDED'
+    _list = 'SCHEDULED', 'DELAYED', 'DEPARTED', 'LANDED', 'CANCELLED'
 
     SCHEDULED = 10
     DELAYED = 20
     DEPARTED = 30
     LANDED = 35
+    CANCELLED = 40
+
+
+class FlightType(Status):
+    _list = 'INBOUND', 'OUTBOUND'
+
+    INBOUND = -1
+    OUTBOUND = 1
 
 
 class Flight(models.Model):
+    code = models.Attribute(required=True)
     airport = models.ReferenceField(Airport, required=True)
-    peer_airport = models.Attribute(required=True)
+    peer_airport_name = models.Attribute(required=True)
     type = models.IntegerField(required=True)
     created_at = models.DateTimeField(auto_now_add=True)
     scheduled = models.DateTimeField(required=True)
     actual = models.DateTimeField(required=True)
     status = models.IntegerField(required=True)
+    codeshare = models.IntegerField(default=0)
+
+    class Meta:
+#        indices = ('full_name',)
+        db = redis.Redis(host='localhost', db=9)
+
 
 FlightStatus.lend_to_class(Flight)
+FlightType.lend_to_class(Flight, 'type')

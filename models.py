@@ -18,7 +18,7 @@ class Airport(models.Model):
         db = redis.Redis(host='localhost', db=9)
 
 
-class Status(object):
+class StatusField(object):
     _list = []
 
     @classmethod
@@ -37,7 +37,7 @@ class Status(object):
             setattr(klass, property_name, property(getx, setx))
 
 
-class FlightStatus(Status):
+class FlightStatus(StatusField):
     _list = 'SCHEDULED', 'DELAYED', 'DEPARTED', 'LANDED', 'CANCELLED'
 
     SCHEDULED = 10
@@ -47,7 +47,7 @@ class FlightStatus(Status):
     CANCELLED = 40
 
 
-class FlightType(Status):
+class FlightType(StatusField):
     _list = 'INBOUND', 'OUTBOUND'
 
     INBOUND = -1

@@ -64,7 +64,7 @@ class DMEDepartureCrawler(_BaseCrawler):
                     if attr_name.startswith('raw_'):
                         parsed_row[attr_name] = str(cell)
                     else:
-                        parsed_row[attr_name] = cell.string
+                        parsed_row[attr_name] = cell.string.strip()
             if self.codeshare.search(parsed_row['code']):
                 parsed_row['codeshare'] = 1
             parsed_row['scheduled'] = self.parse_time(parsed_row['scheduled'])

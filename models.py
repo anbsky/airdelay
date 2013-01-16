@@ -106,6 +106,12 @@ class Flight(models.Model):
                 self.delay_minutes - self.DELAY_UNIT
             ) / self.DELAY_UNIT * self.DELAY_WEIGHT
 
+    def get_csv(self):
+        values = []
+        fields = [f.name for f in self.fields]
+        for field in fields:
+            values.append(unicode(getattr(self, field)))
+        return fields, ','.join(values)
 
     class Meta:
 #        indices = ('full_name',)

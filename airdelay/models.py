@@ -1,13 +1,23 @@
 #encoding=utf-8
 
 from __future__ import print_function, unicode_literals
-from redisco import models
-import redis
+
+import sqlalchemy
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import sessionmaker
 
 
-class Airport(models.Model):
-    code = models.Attribute(required=True)
-    title = models.Attribute(required=False)
+Base = declarative_base()
+engine = sqlalchemy.create_engine('postgresql://airdelay:airdelay@localhost:5432/airdelay-dev', echo=False)
+Session = sessionmaker(bind=engine)
+
+
+class Airport(Base):
+    __tablename__ = 'airports'
+    id = Column(Integer, primary_key=True)
+    iata = Column(String(4))
+    name = Column(String)
 
     def table(self, start=None, end=None):
         filters = []
@@ -24,9 +34,11 @@ class Airport(models.Model):
 {f.code:<30} | {f.created_at:%d.%m.%Y %H:%M} | {f.scheduled:%d.%m.%Y %H:%M} | {f.actual:%d.%m.%Y %H:%M}\
             '''.format(f=flight))
 
-    class Meta:
-#        indices = ('full_name',)
-        db = redis.Redis(host='localhost', db=9)
+    def __unicode__(self):
+        return u'{}'.format(self.iata)
+
+    def __repr__(self):
+        return '<Airport: {}>'.format(self.iata)
 
 
 class StatusField(object):

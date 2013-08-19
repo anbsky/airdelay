@@ -20,7 +20,7 @@ class ParserRegistry(dict):
     def get(self, iata_code):
         return self[iata_code]()
 
-registry = ParserRegistry()
+parsers = ParserRegistry()
 
 
 class FlightStatus(object):
@@ -249,9 +249,9 @@ class VKOParser(BaseParser):
         return self._statuses.get(value)
 
 
-registry.add('DME', DMEParser)
-registry.add('SVO', SVOParser)
-registry.add('VKO', VKOParser)
+parsers.add('DME', DMEParser)
+parsers.add('SVO', SVOParser)
+parsers.add('VKO', VKOParser)
 
 
 def do_import():

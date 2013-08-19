@@ -39,7 +39,7 @@ def json_record_handler(obj):
         raise TypeError, 'Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj))
 
 
-class _BaseCrawler(object):
+class BaseParser(object):
     def __init__(self, delay=0.5):
         self.records = []
         self.status = None
@@ -81,7 +81,7 @@ class _BaseCrawler(object):
         return json.dumps(self.metadata, default=json_record_handler)
 
 
-class DMECrawler(_BaseCrawler):
+class DMEParser(BaseParser):
     iata_code = 'DME'
     url = {
         'departure': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E',
@@ -155,10 +155,8 @@ class DMECrawler(_BaseCrawler):
             if check.search(status):
                 return value
 
-registry.add(DMECrawler)
 
-
-class SVOCrawler(_BaseCrawler):
+class SVOParser(BaseParser):
     iata_code = 'SVO'
     url = 'http://svo.aero/en/tt/'
     _statuses = {
@@ -207,10 +205,8 @@ class SVOCrawler(_BaseCrawler):
             if cls in cell.get('class', []):
                 return status
 
-registry.add(SVOCrawler)
 
-
-class VKOCrawler(_BaseCrawler):
+class VKOParser(BaseParser):
     iata_code = 'VKO'
     url = {
         'departure': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=1',
@@ -252,11 +248,14 @@ class VKOCrawler(_BaseCrawler):
     def _parse_status(self, value):
         return self._statuses.get(value)
 
-registry.add(VKOCrawler)
+
+registry.add('DME', DMEParser)
+registry.add('SVO', SVOParser)
+registry.add('VKO', VKOParser)
 
 
 def do_import():
-    crawler = DMECrawler()
+    crawler = DMEParser()
     for r in crawler.fetch():
         pass
 

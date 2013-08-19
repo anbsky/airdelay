@@ -82,7 +82,6 @@ class BaseParser(object):
 
 
 class DMEParser(BaseParser):
-    iata_code = 'DME'
     url = {
         'departure': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E',
         'arrival': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloArrival_E'
@@ -157,7 +156,6 @@ class DMEParser(BaseParser):
 
 
 class SVOParser(BaseParser):
-    iata_code = 'SVO'
     url = 'http://svo.aero/en/tt/'
     _statuses = {
         'sL': FlightStatus.LANDED,
@@ -207,7 +205,6 @@ class SVOParser(BaseParser):
 
 
 class VKOParser(BaseParser):
-    iata_code = 'VKO'
     url = {
         'departure': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=1',
         'arrival': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=0'

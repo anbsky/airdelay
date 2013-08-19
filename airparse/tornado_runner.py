@@ -15,7 +15,7 @@ from tornado.options import define, options
 import tornado.gen
 import functools
 
-from crawlers import registry, TimetableRow
+from parsers import registry, TimetableRow
 
 define("port", default=8000, help="run on the given port", type=int)
 

@@ -10,18 +10,17 @@ import requests
 import time
 
 
-class CrawlerRegistry(dict):
-    def add(self, klass):
-        if klass in self.values():
-            raise NameError('{} already registered'.format(klass))
-        assert getattr(klass, 'iata_code')
-        assert getattr(klass, 'url')
-        self[klass.iata_code] = klass
+class ParserRegistry(dict):
+    def add(self, iata_code, klass):
+        if iata_code in self.keys():
+            raise NameError('Crawler for {} already registered'.format(iata_code))
+        assert getattr(klass, 'url'), 'Cannot register a crawler without URL'
+        self[iata_code] = klass
 
     def get(self, iata_code):
         return self[iata_code]()
 
-registry = CrawlerRegistry()
+registry = ParserRegistry()
 
 
 class FlightStatus(object):

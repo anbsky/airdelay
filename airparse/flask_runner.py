@@ -6,7 +6,7 @@ import json
 from flask import Flask, after_this_request
 import requests
 
-from crawlers import registry
+from parsers import registry
 
 
 app = Flask(__name__)

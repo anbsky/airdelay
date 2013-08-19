@@ -3,12 +3,13 @@
 from __future__ import print_function, unicode_literals
 from itertools import groupby
 
-from models import Flight
+from airdelay.models import Flight
 
 
 if __name__ == '__main__':
     records = {}
     loads = {}
+    loads_dates, loads_values = [], []
     for date, flights in groupby(
         Flight.objects.filter(
 #            status=Flight.status_list.DELAYED,
@@ -26,3 +27,5 @@ if __name__ == '__main__':
                 delay_total += minutes
                 delay_count += 1
         loads[date] = load, delay_total / delay_count, delay_count, len(flight_weights)
+        loads_dates.append(date)
+        loads_values.append([load, delay_total / delay_count, delay_count, len(flight_weights)])

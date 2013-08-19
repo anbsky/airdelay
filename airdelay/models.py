@@ -41,7 +41,7 @@ class Airport(Base):
         return '<Airport: {}>'.format(self.iata)
 
 
-class StatusField(object):
+class StatusBase(object):
     _list = []
 
     @classmethod
@@ -61,7 +61,7 @@ class StatusField(object):
         setattr(klass, field + '_list', cls)
 
 
-class FlightStatus(StatusField):
+class FlightStatus(StatusBase):
     _list = 'SCHEDULED', 'DELAYED', 'DEPARTED', 'LANDED', 'CANCELLED'
 
     SCHEDULED = 10
@@ -71,15 +71,15 @@ class FlightStatus(StatusField):
     CANCELLED = 40
 
 
-class FlightType(StatusField):
+class FlightType(StatusBase):
     _list = 'INBOUND', 'OUTBOUND'
 
     INBOUND = -1
     OUTBOUND = 1
 
 
-class Flight(models.Model):
-    code = models.Attribute(required=True)
+class Flight(Base):
+    code = Column(required=True)
     airport = models.ReferenceField(Airport, required=True)
     peer_airport_name = models.Attribute(required=True)
     type = models.IntegerField(required=True)

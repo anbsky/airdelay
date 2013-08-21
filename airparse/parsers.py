@@ -5,6 +5,8 @@ import re
 from bs4 import BeautifulSoup
 from dateutil import parser
 from datetime import datetime
+from collections import namedtuple
+from operator import itemgetter
 import json
 import requests
 import time
@@ -17,8 +19,12 @@ class ParserRegistry(dict):
         assert getattr(klass, 'url'), 'Cannot register a crawler without URL'
         self[iata_code] = klass
 
-    def get(self, iata_code):
-        return self[iata_code]()
+    def initialize(self, iata_code):
+        try:
+            klass = self.get(iata_code)
+            return klass(iata_code)
+        except KeyError:
+            raise Exception('airport {} not found'.format(iata_code))
 
 parsers = ParserRegistry()
 
@@ -32,24 +38,56 @@ class FlightStatus(object):
     ARRIVED = 'arrived'
 
 
-def json_record_handler(obj):
-    if hasattr(obj, 'isoformat'):
-        return obj.isoformat()
-    else:
-        raise TypeError, 'Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj))
+class FlightEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return super(FlightEncoder, self).default(o)
+
+
+class Flight(dict):
+    fields = ['origin', 'destination', 'number', 'airline',
+            'date_scheduled', 'date_actual', 'date_retrieved', 'status',
+            'is_codeshare']
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault('date_retrieved', datetime.now())
+        super(Flight, self).__init__(**self._clean_kwargs(kwargs))
+        for f in self.fields:
+            setattr(self, f, property(itemgetter(f)))
+
+    @staticmethod
+    def _clean_kwargs(kwargs):
+        return dict(filter(lambda item: not(item[1] == ''), kwargs.items()))
+
+
+# class Flight(object):
+#     def __init__(self, *args, **kwargs):
+#         pass
+#
+#     def __setattr__(self, key, value):
+#         pass
+#
+#     def __getattr__(self, instance, owner):
+#         pass
 
 
 class BaseParser(object):
-    def __init__(self, delay=0.5):
+    iata_code = None
+    url = None
+
+    def __init__(self, iata_code, delay=2):
         self.records = []
         self.status = None
         self.metadata = {
             'status': None,
-            'iata_code': self.iata_code,
+            'iata_code': iata_code,
             'flights': self.records
         }
         # To prevent banning
         self.delay = delay
+        self.iata_code = iata_code
 
     def set_status(self, value):
         self.metadata['status'] = value
@@ -60,9 +98,8 @@ class BaseParser(object):
             for _type, url in self.url.items():
                 self.records += list(self.parse(
                     BeautifulSoup(requests.get(url).content),
-                    {'type': _type}
+                    type=_type
                 ))
-                print 'got url ' + url
                 time.sleep(self.delay)
         # Single page
         else:
@@ -70,27 +107,23 @@ class BaseParser(object):
         self.set_status('OK')
         return self.records
 
-    def clean_row(self, parsed_row):
-        for key, value in parsed_row.items():
-            if not value:
-                del parsed_row[key]
-        return parsed_row
-
+    def parse(self, content, **defaults):
+        raise NotImplementedError
 
     def to_json(self):
-        return json.dumps(self.metadata, default=json_record_handler)
+        return json.dumps(self.records, cls=FlightEncoder)
 
 
 class DMEParser(BaseParser):
     url = {
-        'departure': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E',
-        'arrival': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloArrival_E'
+        'outbound': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E',
+        'inbound': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloArrival_E'
     }
     _targets = {
-        'FL_NUM_PUB': 'code',
-        'ORG': 'peer_airport_name',
-        'TIM_P': 'time_scheduled',
-        'TIM_L': 'time_actual',
+        'FL_NUM_PUB': 'number',
+        'ORG': 'origin',
+        'TIM_P': 'date_scheduled',
+        'TIM_L': 'date_actual',
         'STATUS': 'raw_status',
     }
     _months = {
@@ -116,16 +149,18 @@ class DMEParser(BaseParser):
     ]
     _codeshare_re = re.compile(ur'совмещен с ')
 
-    def parse(self, soup, preset=None):
+    def parse(self, soup, **defaults):
         for row in soup.find(id='onlinetablo').find_all('tr'):
-            val = self.row_parser(row, preset)
+            val = self._parse_row(row)
             if val:
                 yield val
 
-    def row_parser(self, row, preset):
+    def _parse_row(self, row):
         parsed_row = {}
+
         if row.find('th'):
             return
+
         for cell in row.find_all('td'):
             if cell['class'][0] in self._targets:
                 attr_name = self._targets[cell['class'][0]]
@@ -133,15 +168,21 @@ class DMEParser(BaseParser):
                     parsed_row[attr_name] = str(cell)
                 else:
                     parsed_row[attr_name] = cell.string.strip()
-        if self._codeshare_re.search(parsed_row['code']):
-            parsed_row['is_codeshare'] = True
-        parsed_row['time_scheduled'] = self._parse_time(parsed_row['time_scheduled'])
-        parsed_row['time_actual'] = self._parse_time(parsed_row['time_actual'])
-        parsed_row['status'] = self._parse_status(parsed_row['raw_status'])
-        del parsed_row['raw_status']
-        if preset:
-            parsed_row.update(preset)
-        return self.clean_row(parsed_row)
+        is_codeshare = bool(self._codeshare_re.search(parsed_row['number']))
+
+        date_scheduled = self._parse_time(parsed_row['date_scheduled'])
+        date_actual = self._parse_time(parsed_row['date_actual'])
+        status = self._parse_status(parsed_row['raw_status'])
+
+        return Flight(
+            date_scheduled=date_scheduled,
+            date_actual=date_actual,
+            status=status,
+            number=parsed_row['number'],
+            origin=parsed_row['origin'],
+            destination=self.iata_code,
+            is_codeshare=is_codeshare
+        )
 
     def _parse_time(self, time):
         assert isinstance(time, basestring)
@@ -164,26 +205,28 @@ class SVOParser(BaseParser):
         'sK': FlightStatus.DELAYED
     }
 
-    def parse(self, soup, preset=None):
+    def parse(self, soup, **defaults):
         for row in soup.find('div', {'class': 'timetable'}).find(
             'div', {'class': 'table'}
         ).find('table').find_all('tr'):
-            parsed_row = {}
             row_cls = row.get('class', [])
             if 'sA' in row_cls:
-                parsed_row['type'] = 'arrival'
+                _type = 'arrival'
             elif 'sD' in row_cls:
-                parsed_row['type'] = 'departure'
+                _type = 'departure'
             else:
                 continue
             raw_cells = row.find_all('td')
             raw = [cell.string for cell in raw_cells]
-            parsed_row['time_scheduled'] = self._parse_time(' '.join(raw[:2]))
-            parsed_row['time_actual'] = self._parse_actual(raw[7])
-            parsed_row['code'] = ' '.join(raw[2:4])
-            parsed_row['peer_airport_name'] = raw[5]
-            parsed_row['status'] = self._parse_status(raw_cells[7])
-            yield self.clean_row(parsed_row)
+
+            yield Flight(
+                date_scheduled=self._parse_time(' '.join(raw[:2])),
+                date_actual=self._parse_actual(raw[7]),
+                status=self._parse_status(raw_cells[7]),
+                number=' '.join(raw[2:4]),
+                origin=raw[5],
+                destination=self.iata_code
+            )
 
     def _parse_time(self, time):
         assert isinstance(time, basestring)
@@ -206,8 +249,8 @@ class SVOParser(BaseParser):
 
 class VKOParser(BaseParser):
     url = {
-        'departure': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=1',
-        'arrival': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=0'
+        'outbound': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=1',
+        'inbound': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=0'
     }
     _statuses = {
         'departed': FlightStatus.DEPARTED,
@@ -215,25 +258,28 @@ class VKOParser(BaseParser):
         'has not departed': FlightStatus.DELAYED,
     }
 
-    def parse(self, soup, preset=None):
+    def parse(self, soup, **defaults):
         for row in soup.find('table', {'id': 'TimeTable'}).find('tbody').find_all('tr'):
-            parsed_row = {}
             raw_cells = row.find_all('td')
             raw = [cell.string for cell in raw_cells]
-            parsed_row['code'] = raw[0].strip()
-            parsed_row['airline'] = raw[1].strip()
             airport = ''
-            if preset:
-                if preset.get('type') == 'departure':
-                    airport = raw[3]
-                elif preset.get('type') == 'arrival':
-                    airport = raw[2]
+            if defaults.get('type') == 'outbound':
+                airport = raw[3]
+            elif defaults.get('type') == 'inbound':
+                airport = raw[2]
             airport = airport.replace('\n', ' ')
-            parsed_row['peer_airport_name'] = airport
-            parsed_row['status'] = self._parse_status(raw[4])
-            parsed_row['time_scheduled'] = self._parse_time(raw_cells[5])
-            parsed_row['time_actual'] = self._parse_time(raw_cells[6])
-            yield self.clean_row(parsed_row)
+
+            yield Flight(
+                date_scheduled=self._parse_time(raw_cells[5]),
+                date_actual=self._parse_time(raw_cells[6]),
+                status=self._parse_status(raw[4]),
+                number=raw[0].strip(),
+                origin=airport,
+                destination=self.iata_code,
+                airline=raw[1].strip(),
+                **defaults
+            )
+
 
     def _parse_time(self, cell):
         time_str = ' '.join(list(cell.stripped_strings))

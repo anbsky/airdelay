@@ -8,6 +8,7 @@ from datetime import datetime
 from collections import namedtuple
 from operator import itemgetter
 from itertools import chain
+from random import randint
 import json
 import requests
 import time
@@ -83,9 +84,24 @@ class Flight(dict):
 #         pass
 
 
+_agents = [
+    'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Win64; x64; Trident/6.0)',
+    'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Win64; x64; Trident/4.0; .NET CLR 2.0.50727; SLCC2; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; Tablet PC 2.0)',
+    'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; GTB6.4; .NET CLR 1.1.4322; FDM; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/534.57.2 (KHTML, like Gecko) Version/5.1.7 Safari/534.57.2',
+    'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/531.21.8 (KHTML, like Gecko) Version/4.0.4 Safari/531.21.10',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:21.0) Gecko/20100101 Firefox/21.0',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.31 (KHTML, like Gecko) Chrome/26.0.1410.64 Safari/537.31',
+    'Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.22 (KHTML, like Gecko) Ubuntu Chromium/25.0.1364.160 Chrome/25.0.1364.160 Safari/537.22',
+]
+
 class BaseParser(object):
     iata_code = None
     url = None
+    request_headers = {
+        'Accept-Language': 'en-US',
+    }
 
     def __init__(self, iata_code, delay=2):
         self.records = []
@@ -99,6 +115,11 @@ class BaseParser(object):
         self.delay = delay
         self.iata_code = iata_code
 
+    def get_request_headers(self):
+        headers = self.request_headers
+        headers['User-Agent'] = _agents[randint(0, len(_agents) - 1)]
+        return headers
+
     def set_status(self, value):
         self.metadata['status'] = value
 
@@ -107,13 +128,14 @@ class BaseParser(object):
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
                 self.records += list(self.parse(
-                    BeautifulSoup(requests.get(url).content),
+                    BeautifulSoup(requests.get(url, headers=self.get_request_headers()).content),
                     type=_type
                 ))
                 time.sleep(self.delay)
         # Single page
         else:
-            self.records += list(self.parse(BeautifulSoup(requests.get(self.url).content)))
+            self.records += list(self.parse(BeautifulSoup(
+                requests.get(self.url, headers=self.get_request_headers()).content)))
         self.set_status('OK')
         return self.records
 
@@ -189,7 +211,7 @@ class DMEParser(BaseParser):
             date_actual=date_actual,
             status=status,
             number=parsed_row['number'],
-            origin_name=parsed_row['origin_name'],
+            origin_name=re.sub(r'\(.+\)', '', parsed_row['origin_name']),
             destination=self.iata_code,
             is_codeshare=is_codeshare
         )
@@ -284,9 +306,9 @@ class VKOParser(BaseParser):
                 date_actual=self._parse_time(raw_cells[6]),
                 status=self._parse_status(raw[4]),
                 number=raw[0].strip(),
-                origin_name=airport,
+                origin_name=re.sub(r'\s?\(.+\)', '', airport).strip().capitalize(),
                 destination=self.iata_code,
-                airline=raw[1].strip(),
+                airline=raw[1].strip().capitalize(),
                 **defaults
             )
 

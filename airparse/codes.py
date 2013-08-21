@@ -12,8 +12,9 @@ def find_airport_code(name):
 
 
 def find_airport_by_name(name):
+    name = name.lower()
     try:
-        return filter(lambda p: name == p['city'] or name == p['name'], get_airports())[0]
+        return filter(lambda p: name == p['city'].lower() or name == p['name'].lower(), get_airports())[0]
     except IndexError:
         return None
 

@@ -6,7 +6,7 @@ import json
 from flask import Flask, after_this_request
 import requests
 
-from parsers import registry
+from parsers import parsers
 
 
 app = Flask(__name__)
@@ -18,9 +18,9 @@ def timetable(iata_code):
         response.headers['Content-type'] = 'application/json'
         return response
 
-    crawler = registry.get(iata_code)
-    crawler.run()
-    return crawler.to_json()
+    parser = parsers.initialize(iata_code)
+    parser.run()
+    return parser.to_json()
 
 
 if __name__ == "__main__":

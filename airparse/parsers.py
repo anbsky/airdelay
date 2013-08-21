@@ -7,9 +7,12 @@ from dateutil import parser
 from datetime import datetime
 from collections import namedtuple
 from operator import itemgetter
+from itertools import chain
 import json
 import requests
 import time
+
+from codes import find_airport_code
 
 
 class ParserRegistry(dict):
@@ -47,19 +50,26 @@ class FlightEncoder(json.JSONEncoder):
 
 
 class Flight(dict):
-    fields = ['origin', 'destination', 'number', 'airline',
+    fields = ['origin', 'origin_name', 'destination', 'number', 'airline',
             'date_scheduled', 'date_actual', 'date_retrieved', 'status',
             'is_codeshare']
 
     def __init__(self, **kwargs):
         kwargs.setdefault('date_retrieved', datetime.now())
-        super(Flight, self).__init__(**self._clean_kwargs(kwargs))
         for f in self.fields:
             setattr(self, f, property(itemgetter(f)))
+        super(Flight, self).__init__(**self._cleanup(self._clean_kwargs(kwargs)))
 
     @staticmethod
     def _clean_kwargs(kwargs):
         return dict(filter(lambda item: not(item[1] == ''), kwargs.items()))
+
+    @staticmethod
+    def _cleanup(data):
+        if 'origin' not in data:
+            data['origin'] = find_airport_code(data['origin_name'])
+        return data
+
 
 
 # class Flight(object):
@@ -121,7 +131,7 @@ class DMEParser(BaseParser):
     }
     _targets = {
         'FL_NUM_PUB': 'number',
-        'ORG': 'origin',
+        'ORG': 'origin_name',
         'TIM_P': 'date_scheduled',
         'TIM_L': 'date_actual',
         'STATUS': 'raw_status',
@@ -179,7 +189,7 @@ class DMEParser(BaseParser):
             date_actual=date_actual,
             status=status,
             number=parsed_row['number'],
-            origin=parsed_row['origin'],
+            origin_name=parsed_row['origin_name'],
             destination=self.iata_code,
             is_codeshare=is_codeshare
         )
@@ -224,7 +234,7 @@ class SVOParser(BaseParser):
                 date_actual=self._parse_actual(raw[7]),
                 status=self._parse_status(raw_cells[7]),
                 number=' '.join(raw[2:4]),
-                origin=raw[5],
+                origin_name=raw[5],
                 destination=self.iata_code
             )
 
@@ -274,7 +284,7 @@ class VKOParser(BaseParser):
                 date_actual=self._parse_time(raw_cells[6]),
                 status=self._parse_status(raw[4]),
                 number=raw[0].strip(),
-                origin=airport,
+                origin_name=airport,
                 destination=self.iata_code,
                 airline=raw[1].strip(),
                 **defaults

@@ -22,31 +22,6 @@ define("port", default=8000, help="run on the given port", type=int)
 
 class IndexHandler(tornado.web.RequestHandler):
     @tornado.gen.coroutine
-    def get_old(self, iata_code, _type=None):
-        client = tornado.httpclient.AsyncHTTPClient()
-        try:
-            parser = parsers.initialize(iata_code)
-        except KeyError:
-            self.write(json.dumps({'status': 'error', 'message': 'no such airport found'}))
-            self.finish()
-        else:
-            records = []
-            if parser.is_multi_url:
-                for _type, url in parser.url.items():
-                    records += list(parser.parse(parser.parse_html((
-                        yield client.fetch(url, headers=parser.get_request_headers())
-                    )), type=_type))
-                parser.sleep()
-            else:
-                records = list(parser.parse(parser.parse_html((
-                    yield client.fetch(parser.url, headers=parser.get_request_headers())
-                )), type=_type))
-
-            self.write(parser.to_json(records))
-            self.set_header('Content-Type', 'application/json')
-            self.finish()
-
-    @tornado.gen.coroutine
     def get(self, iata_code, _type=None):
         client = tornado.httpclient.AsyncHTTPClient()
         try:
@@ -56,8 +31,8 @@ class IndexHandler(tornado.web.RequestHandler):
             self.finish()
         else:
             records = yield parser.run_async()
-
             self.write(parser.to_json(records))
+
             self.set_header('Content-Type', 'application/json')
             self.finish()
 

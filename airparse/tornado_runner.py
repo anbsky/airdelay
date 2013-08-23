@@ -34,12 +34,12 @@ class IndexHandler(tornado.web.RequestHandler):
             if parser.is_multi_url:
                 for _type, url in parser.url.items():
                     records += list(parser.parse(parser.parse_html((
-                        yield tornado.gen.Task(client.fetch, url, headers=parser.get_request_headers())
+                        yield client.fetch(url, headers=parser.get_request_headers())
                     )), type=_type))
                 parser.sleep()
             else:
                 records = list(parser.parse(parser.parse_html((
-                    yield tornado.gen.Task(client.fetch, parser.url, headers=parser.get_request_headers())
+                    yield client.fetch(parser.url, headers=parser.get_request_headers())
                 )), type=_type))
 
             self.write(parser.to_json(records))

@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import json
 from flask import Flask, after_this_request
-import requests
 
 from parsers import parsers
 

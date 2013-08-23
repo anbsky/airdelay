@@ -132,12 +132,39 @@ class BaseParser(object):
     def set_status(self, value):
         self.metadata['status'] = value
 
+    @property
+    def is_multi_url(self):
+        return isinstance(self.url, dict)
+
+    def sleep(self):
+        time.sleep(self.delay)
+
+    def parse_html(self, content):
+        return BeautifulSoup(content)
+
     def run(self):
+        # Airport website has separate pages for departure/arrival
+        if self.is_multi_url:
+            for _type, url in self.url.items():
+                airport_page = requests.get(url, headers=self.get_request_headers()).content
+                self.records += list(self.parse(
+                    self.parse_html(airport_page),
+                    type=_type
+                ))
+                self.sleep()
+        # Single page
+        else:
+            self.records += list(self.parse(self.parse_html(
+                requests.get(self.url, headers=self.get_request_headers()).content)))
+        self.set_status('OK')
+        return self.records
+
+    def run_async(self, client):
         # Airport website has separate pages for departure/arrival
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
                 self.records += list(self.parse(
-                    BeautifulSoup(requests.get(url, headers=self.get_request_headers()).content),
+                    BeautifulSoup(client(url, **self.get_request_headers()).content),
                     type=_type
                 ))
                 time.sleep(self.delay)
@@ -151,8 +178,8 @@ class BaseParser(object):
     def parse(self, content, **defaults):
         raise NotImplementedError
 
-    def to_json(self):
-        return json.dumps(self.records, cls=FlightEncoder)
+    def to_json(self, records=None):
+        return json.dumps(records or self.records, cls=FlightEncoder)
 
 
 class DMEParser(BaseParser):

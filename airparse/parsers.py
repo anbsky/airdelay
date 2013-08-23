@@ -13,7 +13,7 @@ import json
 import requests
 import time
 
-from codes import find_airport_code
+from codes import find_airport_code, find_airport_name
 
 
 class ParserRegistry(dict):
@@ -57,11 +57,29 @@ class Flight(dict):
 
     def __init__(self, **kwargs):
         kwargs.setdefault('date_retrieved', datetime.now())
-        for f in self.fields:
-            setattr(self, f, property(itemgetter(f)))
         clean_data = self._cleanup(self._clean_kwargs(kwargs))
         strict_data = {f: clean_data[f] for f in set(self.fields) & set(clean_data.keys())}
         super(Flight, self).__init__(**strict_data)
+
+    def __getattr__(self, item):
+        if item in self.fields:
+            return self.get(item, None)
+        else:
+            raise AttributeError(item)
+
+    def __setattr__(self, key, value):
+        if key in self.fields:
+            self[key] = value
+        else:
+            raise AttributeError(key)
+
+    def set_origin(self, name, iata_code=None):
+        self.origin_name = name
+        self.origin = iata_code or find_airport_code(name)
+
+    def set_destination(self, name, iata_code=None):
+        self.destination_name = name
+        self.destination = iata_code or find_airport_code(name)
 
     @staticmethod
     def _clean_kwargs(kwargs):
@@ -69,8 +87,6 @@ class Flight(dict):
 
     @staticmethod
     def _cleanup(data):
-        if 'origin' not in data:
-            data['origin'] = find_airport_code(data['origin_name'])
         return data
 
 
@@ -88,6 +104,7 @@ _agents = [
 
 class BaseParser(object):
     iata_code = None
+    name = None
     url = None
     request_headers = {
         'Accept-Language': 'en-US',
@@ -96,14 +113,16 @@ class BaseParser(object):
     def __init__(self, iata_code, delay=2):
         self.records = []
         self.status = None
+        self.delay = delay
+        self.iata_code = iata_code
+        self.name = find_airport_name(iata_code)
+
         self.metadata = {
             'status': None,
             'iata_code': iata_code,
+            'name': self.name,
             'flights': self.records
         }
-        # To prevent banning
-        self.delay = delay
-        self.iata_code = iata_code
 
     def get_request_headers(self):
         headers = self.request_headers
@@ -143,7 +162,7 @@ class DMEParser(BaseParser):
     }
     _targets = {
         'FL_NUM_PUB': 'number',
-        'ORG': 'origin_name',
+        'ORG': 'peer',
         'TIM_P': 'date_scheduled',
         'TIM_L': 'date_actual',
         'STATUS': 'raw_status',
@@ -190,18 +209,25 @@ class DMEParser(BaseParser):
             date_scheduled = self._parse_time(parsed_row['date_scheduled'])
             date_actual = self._parse_time(parsed_row['date_actual'])
             status = self._parse_status(parsed_row['raw_status'])
+            peer = re.sub(r'\(.+\)', '', parsed_row['peer'])
 
-            yield Flight(
+            f = Flight(
                 source=self.iata_code,
                 date_scheduled=date_scheduled,
                 date_actual=date_actual,
                 status=status,
                 number=parsed_row['number'],
-                origin_name=re.sub(r'\(.+\)', '', parsed_row['origin_name']),
-                destination=self.iata_code,
                 is_codeshare=is_codeshare
             )
 
+            if defaults['type'] == 'inbound':
+                f.set_destination(self.name, self.iata_code)
+                f.set_origin(peer)
+            else:
+                f.set_destination(peer)
+                f.set_origin(self.name, self.iata_code)
+
+            yield f
 
     def _parse_time(self, time):
         assert isinstance(time, basestring)
@@ -238,14 +264,20 @@ class SVOParser(BaseParser):
             raw_cells = row.find_all('td')
             raw = [cell.string for cell in raw_cells]
 
-            yield Flight(
+            f = Flight(
                 date_scheduled=self._parse_time(' '.join(raw[:2])),
                 date_actual=self._parse_actual(raw[7]),
                 status=self._parse_status(raw_cells[7]),
                 number=' '.join(raw[2:4]),
-                origin_name=raw[5],
-                destination=self.iata_code
+                source=self.iata_code
             )
+            if _type == 'arrival':
+                f.set_destination(self.name, self.iata_code)
+                f.set_origin(raw[5])
+            else:
+                f.set_destination(raw[5])
+                f.set_origin(self.name, self.iata_code)
+            yield f
 
     def _parse_time(self, time):
         assert isinstance(time, basestring)
@@ -286,18 +318,27 @@ class VKOParser(BaseParser):
                 airport = raw[3]
             elif defaults.get('type') == 'inbound':
                 airport = raw[2]
-            airport = airport.replace('\n', ' ')
+            airport = re.sub(r'\s?\(.+\)', '', airport.replace('\n', ' ')).strip().capitalize()
 
-            yield Flight(
+            f = Flight(
+                source=self.iata_code,
                 date_scheduled=self._parse_time(raw_cells[5]),
                 date_actual=self._parse_time(raw_cells[6]),
                 status=self._parse_status(raw[4]),
                 number=raw[0].strip(),
-                origin_name=re.sub(r'\s?\(.+\)', '', airport).strip().capitalize(),
                 destination=self.iata_code,
                 airline=raw[1].strip().capitalize(),
                 **defaults
             )
+
+            if defaults['type'] == 'outbound':
+                f.set_origin(self.name, self.iata_code)
+                f.set_destination(airport)
+            else:
+                f.set_origin(airport)
+                f.set_destination(self.name, self.iata_code)
+
+            yield f
 
 
     def _parse_time(self, cell):

@@ -140,6 +140,7 @@ class BaseParser(object):
         time.sleep(self.delay)
 
     def parse_html(self, content):
+        content = content.body if hasattr(content, 'body') else content
         return BeautifulSoup(content)
 
     def run(self):

@@ -143,11 +143,12 @@ class BaseParser(object):
     def sleep(self):
         time.sleep(self.delay)
 
-    def fetch_url(self, url):
+    def fetch_url(self, url, sleep=False):
+        if sleep: self.sleep()
         return requests.get(url, headers=self.get_request_headers())
 
-    def fetch_url_async(self, url):
-        self.sleep()
+    def fetch_url_async(self, url, sleep=False):
+        if sleep: self.sleep()
         return self._session.get(url, headers=self.get_request_headers())
 
     def parse_html(self, response):
@@ -177,16 +178,17 @@ class BaseParser(object):
 
     def run_async_glue(self):
         fetchers = {}
+        executor = futures.ThreadPoolExecutor(max_workers=2)
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
-                fetchers[self.fetch_url_async(url)] = _type
+                fetcher = executor.submit(self.fetch_url, url, sleep=True)
+                fetchers[fetcher] = _type
                 # time.sleep(self.delay)
         else:
-            fetchers[self.fetch_url_async(self.url)] = 'all'
+            fetchers[executor.submit(self.fetch_url, self.url)] = 'all'
 
-        with futures.ThreadPoolExecutor(max_workers=1) as executor:
-            parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
-                       for fetcher in futures.as_completed(fetchers)]
+        parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
+                   for fetcher in futures.as_completed(fetchers)]
         return parsers
 
     def run_async_return(self):
@@ -194,8 +196,9 @@ class BaseParser(object):
         return self.records
 
     def run_async(self):
-        with futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(self.run_async_return)
+        executor = futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(self.run_async_return)
+        return future
 
     def parse(self, content, **defaults):
         raise NotImplementedError

@@ -56,7 +56,7 @@ class Flight(dict):
             'is_codeshare', 'source']
 
     def __init__(self, **kwargs):
-        kwargs.setdefault('time_retrieved', datetime.now())
+        kwargs.setdefault('time_retrieved', datetime.now().replace(microsecond=0))
         clean_data = self._cleanup(self._clean_kwargs(kwargs))
         strict_data = {f: clean_data[f] for f in set(self.fields) & set(clean_data.keys())}
         super(Flight, self).__init__(**strict_data)

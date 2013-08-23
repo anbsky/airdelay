@@ -52,11 +52,11 @@ class FlightEncoder(json.JSONEncoder):
 
 class Flight(dict):
     fields = ['origin', 'origin_name', 'destination', 'destination_name', 'number', 'airline',
-            'date_scheduled', 'date_actual', 'date_retrieved', 'status',
+            'time_scheduled', 'date_actual', 'time_retrieved', 'status',
             'is_codeshare', 'source']
 
     def __init__(self, **kwargs):
-        kwargs.setdefault('date_retrieved', datetime.now())
+        kwargs.setdefault('time_retrieved', datetime.now())
         clean_data = self._cleanup(self._clean_kwargs(kwargs))
         strict_data = {f: clean_data[f] for f in set(self.fields) & set(clean_data.keys())}
         super(Flight, self).__init__(**strict_data)
@@ -163,7 +163,7 @@ class DMEParser(BaseParser):
     _targets = {
         'FL_NUM_PUB': 'number',
         'ORG': 'peer',
-        'TIM_P': 'date_scheduled',
+        'TIM_P': 'time_scheduled',
         'TIM_L': 'date_actual',
         'STATUS': 'raw_status',
     }
@@ -206,14 +206,14 @@ class DMEParser(BaseParser):
                         parsed_row[attr_name] = cell.string.strip()
             is_codeshare = bool(self._codeshare_re.search(parsed_row['number']))
 
-            date_scheduled = self._parse_time(parsed_row['date_scheduled'])
+            time_scheduled = self._parse_time(parsed_row['time_scheduled'])
             date_actual = self._parse_time(parsed_row['date_actual'])
             status = self._parse_status(parsed_row['raw_status'])
             peer = re.sub(r'\(.+\)', '', parsed_row['peer'])
 
             f = Flight(
                 source=self.iata_code,
-                date_scheduled=date_scheduled,
+                time_scheduled=time_scheduled,
                 date_actual=date_actual,
                 status=status,
                 number=parsed_row['number'],
@@ -265,7 +265,7 @@ class SVOParser(BaseParser):
             raw = [cell.string for cell in raw_cells]
 
             f = Flight(
-                date_scheduled=self._parse_time(' '.join(raw[:2])),
+                time_scheduled=self._parse_time(' '.join(raw[:2])),
                 date_actual=self._parse_actual(raw[7]),
                 status=self._parse_status(raw_cells[7]),
                 number=' '.join(raw[2:4]),
@@ -322,8 +322,8 @@ class VKOParser(BaseParser):
 
             f = Flight(
                 source=self.iata_code,
-                date_scheduled=self._parse_time(raw_cells[5]),
-                date_actual=self._parse_time(raw_cells[6]),
+                time_scheduled=self._parse_time(raw_cells[5]),
+                time_actual=self._parse_time(raw_cells[6]),
                 status=self._parse_status(raw[4]),
                 number=raw[0].strip(),
                 destination=self.iata_code,

@@ -17,13 +17,23 @@ def make_lookup_key(name):
 lk = make_lookup_key
 
 
-def get_cache():
-    global _airports_cached
-    r = redis.StrictRedis()
+def get_connection():
+    return redis.StrictRedis()
 
-    if not r.get(lk('__cached')):
+
+def is_cached(r):
+    try:
+        return int(r.get(lk('__cached')))
+    except TypeError:
+        return 0
+
+
+def get_cache():
+    r = get_connection()
+
+    if not is_cached(r):
         cache_airports(r, load_airports())
-        r.set(lk('__cached'), True)
+        r.set(lk('__cached'), 1)
 
     return r
 
@@ -37,6 +47,11 @@ def cache_airports(r, airports):
             r.set(name_key, port['iata_code'])
 
         r.hmset('airport:' + port['iata_code'], port)
+
+
+def reload_airports_cache():
+    get_connection().set(lk('__cached'), 0)
+    get_cache()
 
 
 def load_airports(filename='airports.dat'):

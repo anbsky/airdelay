@@ -147,6 +147,7 @@ class BaseParser(object):
         return requests.get(url, headers=self.get_request_headers())
 
     def fetch_url_async(self, url):
+        self.sleep()
         return self._session.get(url, headers=self.get_request_headers())
 
     def parse_html(self, response):
@@ -188,9 +189,13 @@ class BaseParser(object):
                        for fetcher in futures.as_completed(fetchers)]
         return parsers
 
-    def run_async(self):
+    def run_async_return(self):
         futures.wait(self.run_async_glue())
         return self.records
+
+    def run_async(self):
+        with futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(self.run_async_return)
 
     def parse(self, content, **defaults):
         raise NotImplementedError

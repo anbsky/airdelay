@@ -51,9 +51,9 @@ class FlightEncoder(json.JSONEncoder):
 
 
 class Flight(dict):
-    fields = ['origin', 'origin_name', 'destination', 'number', 'airline',
+    fields = ['origin', 'origin_name', 'destination', 'destination_name', 'number', 'airline',
             'date_scheduled', 'date_actual', 'date_retrieved', 'status',
-            'is_codeshare']
+            'is_codeshare', 'source']
 
     def __init__(self, **kwargs):
         kwargs.setdefault('date_retrieved', datetime.now())
@@ -70,18 +70,6 @@ class Flight(dict):
         if 'origin' not in data:
             data['origin'] = find_airport_code(data['origin_name'])
         return data
-
-
-
-# class Flight(object):
-#     def __init__(self, *args, **kwargs):
-#         pass
-#
-#     def __setattr__(self, key, value):
-#         pass
-#
-#     def __getattr__(self, instance, owner):
-#         pass
 
 
 _agents = [
@@ -183,11 +171,11 @@ class DMEParser(BaseParser):
 
     def parse(self, soup, **defaults):
         for row in soup.find(id='onlinetablo').find_all('tr'):
-            val = self._parse_row(row)
+            val = self._parse_row(row, defaults)
             if val:
                 yield val
 
-    def _parse_row(self, row):
+    def _parse_row(self, row, defaults):
         parsed_row = {}
 
         if row.find('th'):
@@ -207,6 +195,7 @@ class DMEParser(BaseParser):
         status = self._parse_status(parsed_row['raw_status'])
 
         return Flight(
+            source=self.iata_code,
             date_scheduled=date_scheduled,
             date_actual=date_actual,
             status=status,

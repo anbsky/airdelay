@@ -8,6 +8,10 @@ def find_airport_code(name):
     return get_cache().get(lk(name))
 
 
+def find_airport_name(code):
+    return get_cache().hget('airport:' + code, 'name')
+
+
 def make_lookup_key(name):
     return 'airport_lookup:' + name.lower()
 lk = make_lookup_key
@@ -15,7 +19,7 @@ lk = make_lookup_key
 
 def get_cache():
     global _airports_cached
-    r = redis.Redis()
+    r = redis.StrictRedis()
 
     if not r.get(lk('__cached')):
         cache_airports(r, load_airports())

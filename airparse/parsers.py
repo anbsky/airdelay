@@ -12,6 +12,8 @@ from random import randint
 import json
 import requests
 import time
+from concurrent import futures
+from requests_futures.sessions import FuturesSession
 
 from codes import find_airport_code, find_airport_name
 
@@ -106,6 +108,7 @@ class BaseParser(object):
     iata_code = None
     name = None
     url = None
+    client = None
     request_headers = {
         'Accept-Language': 'en-US',
     }
@@ -116,6 +119,7 @@ class BaseParser(object):
         self.delay = delay
         self.iata_code = iata_code
         self.name = find_airport_name(iata_code)
+        self._session = FuturesSession()
 
         self.metadata = {
             'status': None,
@@ -139,41 +143,53 @@ class BaseParser(object):
     def sleep(self):
         time.sleep(self.delay)
 
-    def parse_html(self, content):
-        content = content.body if hasattr(content, 'body') else content
-        return BeautifulSoup(content)
+    def fetch_url(self, url):
+        return requests.get(url, headers=self.get_request_headers())
+
+    def fetch_url_async(self, url):
+        return self._session.get(url, headers=self.get_request_headers())
+
+    def parse_html(self, response):
+        # Tornado Async client or Requests
+        html = getattr(response, 'body', response.content)
+        return BeautifulSoup(html)
+
+    def parse_async(self, content, **defaults):
+        self.records += list(self.parse(self.parse_html(content), **defaults))
 
     def run(self):
         # Airport website has separate pages for departure/arrival
         if self.is_multi_url:
             for _type, url in self.url.items():
-                airport_page = requests.get(url, headers=self.get_request_headers()).content
                 self.records += list(self.parse(
-                    self.parse_html(airport_page),
+                    self.parse_html(self.fetch_url(url)),
                     type=_type
                 ))
                 self.sleep()
         # Single page
         else:
             self.records += list(self.parse(self.parse_html(
-                requests.get(self.url, headers=self.get_request_headers()).content)))
+                self.parse_html(self.fetch_url(self.url)),
+            )))
         self.set_status('OK')
         return self.records
 
-    def run_async(self, client):
-        # Airport website has separate pages for departure/arrival
+    def run_async_glue(self):
+        fetchers = {}
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
-                self.records += list(self.parse(
-                    BeautifulSoup(client(url, **self.get_request_headers()).content),
-                    type=_type
-                ))
-                time.sleep(self.delay)
-        # Single page
+                fetchers[self.fetch_url_async(url)] = _type
+                # time.sleep(self.delay)
         else:
-            self.records += list(self.parse(BeautifulSoup(
-                requests.get(self.url, headers=self.get_request_headers()).content)))
-        self.set_status('OK')
+            fetchers[self.fetch_url_async(self.url)] = 'all'
+
+        with futures.ThreadPoolExecutor(max_workers=1) as executor:
+            parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
+                       for fetcher in futures.as_completed(fetchers)]
+        return parsers
+
+    def run_async(self):
+        futures.wait(self.run_async_glue())
         return self.records
 
     def parse(self, content, **defaults):

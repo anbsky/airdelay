@@ -59,7 +59,9 @@ class Flight(dict):
         kwargs.setdefault('date_retrieved', datetime.now())
         for f in self.fields:
             setattr(self, f, property(itemgetter(f)))
-        super(Flight, self).__init__(**self._cleanup(self._clean_kwargs(kwargs)))
+        clean_data = self._cleanup(self._clean_kwargs(kwargs))
+        strict_data = {f: clean_data[f] for f in set(self.fields) & set(clean_data.keys())}
+        super(Flight, self).__init__(**strict_data)
 
     @staticmethod
     def _clean_kwargs(kwargs):

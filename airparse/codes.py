@@ -1,29 +1,38 @@
 # encoding=utf-8
 
 import csv
-
-
-_airports_cache = None
+import redis
 
 
 def find_airport_code(name):
-    port = find_airport_by_name(name)
-    return port['iata_code'] if port else None
+    return get_cache().get(lk(name))
 
 
-def find_airport_by_name(name):
-    name = name.lower()
-    try:
-        return filter(lambda p: name == p['city'].lower() or name == p['name'].lower(), get_airports())[0]
-    except IndexError:
-        return None
+def make_lookup_key(name):
+    return 'airport_lookup:' + name.lower()
+lk = make_lookup_key
 
 
-def get_airports():
-    global _airports_cache
-    if _airports_cache is None:
-        _airports_cache = list(load_airports())
-    return _airports_cache
+def get_cache():
+    global _airports_cached
+    r = redis.Redis()
+
+    if not r.get(lk('__cached')):
+        cache_airports(r, load_airports())
+        r.set(lk('__cached'), True)
+
+    return r
+
+
+def cache_airports(r, airports):
+    for port in airports:
+        city_key = lk(port['city'])
+        name_key = lk(port['name'])
+        r.set(city_key, port['iata_code'])
+        if city_key != name_key:
+            r.set(name_key, port['iata_code'])
+
+        r.hmset('airport:' + port['iata_code'], port)
 
 
 def load_airports(filename='airports.dat'):

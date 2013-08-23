@@ -173,39 +173,35 @@ class DMEParser(BaseParser):
 
     def parse(self, soup, **defaults):
         for row in soup.find(id='onlinetablo').find_all('tr'):
-            val = self._parse_row(row, defaults)
-            if val:
-                yield val
+            parsed_row = {}
 
-    def _parse_row(self, row, defaults):
-        parsed_row = {}
+            if row.find('th'):
+                continue
 
-        if row.find('th'):
-            return
+            for cell in row.find_all('td'):
+                if cell['class'][0] in self._targets:
+                    attr_name = self._targets[cell['class'][0]]
+                    if attr_name.startswith('raw_'):
+                        parsed_row[attr_name] = str(cell)
+                    else:
+                        parsed_row[attr_name] = cell.string.strip()
+            is_codeshare = bool(self._codeshare_re.search(parsed_row['number']))
 
-        for cell in row.find_all('td'):
-            if cell['class'][0] in self._targets:
-                attr_name = self._targets[cell['class'][0]]
-                if attr_name.startswith('raw_'):
-                    parsed_row[attr_name] = str(cell)
-                else:
-                    parsed_row[attr_name] = cell.string.strip()
-        is_codeshare = bool(self._codeshare_re.search(parsed_row['number']))
+            date_scheduled = self._parse_time(parsed_row['date_scheduled'])
+            date_actual = self._parse_time(parsed_row['date_actual'])
+            status = self._parse_status(parsed_row['raw_status'])
 
-        date_scheduled = self._parse_time(parsed_row['date_scheduled'])
-        date_actual = self._parse_time(parsed_row['date_actual'])
-        status = self._parse_status(parsed_row['raw_status'])
+            yield Flight(
+                source=self.iata_code,
+                date_scheduled=date_scheduled,
+                date_actual=date_actual,
+                status=status,
+                number=parsed_row['number'],
+                origin_name=re.sub(r'\(.+\)', '', parsed_row['origin_name']),
+                destination=self.iata_code,
+                is_codeshare=is_codeshare
+            )
 
-        return Flight(
-            source=self.iata_code,
-            date_scheduled=date_scheduled,
-            date_actual=date_actual,
-            status=status,
-            number=parsed_row['number'],
-            origin_name=re.sub(r'\(.+\)', '', parsed_row['origin_name']),
-            destination=self.iata_code,
-            is_codeshare=is_codeshare
-        )
 
     def _parse_time(self, time):
         assert isinstance(time, basestring)

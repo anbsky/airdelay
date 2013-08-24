@@ -225,7 +225,7 @@ class BaseParser(object):
         self.records.save_to_cache()
         return self.records
 
-    def run_async_glue(self):
+    def run_async_parsers(self):
         fetchers = {}
         executor = futures.ThreadPoolExecutor(max_workers=2)
 
@@ -241,14 +241,23 @@ class BaseParser(object):
                    for fetcher in futures.as_completed(fetchers)]
         return parsers
 
+
+    # def run_async_glue(self):
+    #     executor = futures.ThreadPoolExecutor(max_workers=2)
+    #     return executor.submit(self.records.load_from_cache)
+    #     futures.as_completed(load_result)
+    #     return executor.submit(self.run_async_parsers)
+
+
     def run_async_return(self):
-        futures.wait(self.run_async_glue())
-        executor = futures.ThreadPoolExecutor(max_workers=1)
+        executor = futures.ThreadPoolExecutor(max_workers=2)
+        if not self.records.load_from_cache():
+            futures.wait(self.run_async_parsers())
+        self.records.save_to_cache()
         return self.records
 
     def run_async(self):
         executor = futures.ThreadPoolExecutor(max_workers=1)
-        executor.submit(self.records.save_to_cache)
         future = executor.submit(self.run_async_return)
         return future
 

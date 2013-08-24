@@ -18,8 +18,8 @@ def timetable(iata_code):
         return response
 
     parser = parsers.initialize(iata_code)
-    parser.run()
-    return parser.to_json()
+    records = parser.run()
+    return records.to_json()
 
 
 if __name__ == "__main__":

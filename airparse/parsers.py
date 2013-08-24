@@ -5,15 +5,13 @@ import re
 from bs4 import BeautifulSoup
 from dateutil import parser
 from datetime import datetime
-from collections import namedtuple
-from operator import itemgetter
-from itertools import chain
 from random import randint
 import json
 import requests
 import time
 from concurrent import futures
 from requests_futures.sessions import FuturesSession
+import redis
 
 from codes import find_airport_code, find_airport_name
 
@@ -50,6 +48,10 @@ class FlightEncoder(json.JSONEncoder):
             return o.isoformat()
 
         return super(FlightEncoder, self).default(o)
+
+
+def flight_decoder(dct):
+    return Flight(**dct)
 
 
 class Flight(dict):
@@ -98,6 +100,38 @@ class Flight(dict):
 
 
 class Timetable(list):
+    iata_code = None
+    time_retrieved = None
+    cache_timeout = 30
+
+    def __init__(self, iata_code, *args, **kwargs):
+        self.iata_code = iata_code
+        super(Timetable, self).__init__(*args, **kwargs)
+
+    def load_from_cache(self):
+        r = redis.StrictRedis()
+        try:
+            cached_timetable = r.get('airport_cache:' + self.iata_code)
+            loaded_timetable = self.from_json(self.iata_code, cached_timetable)
+        except (ValueError, TypeError):
+            pass
+        else:
+            del self[:]
+            self.extend(loaded_timetable)
+            return True
+        return False
+
+    def save_to_cache(self):
+        r = redis.StrictRedis()
+        if r.exists('airport_cache:' + self.iata_code):
+            return
+        r.set('airport_cache:' + self.iata_code, self.to_json())
+        r.expire('airport_cache:' + self.iata_code, self.cache_timeout)
+
+    @classmethod
+    def from_json(cls, iata_code, json_string):
+        return cls(iata_code, json.loads(json_string, object_hook=flight_decoder))
+
     def to_json(self):
         return json.dumps(self, cls=FlightEncoder)
 
@@ -114,6 +148,7 @@ _agents = [
     'Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.22 (KHTML, like Gecko) Ubuntu Chromium/25.0.1364.160 Chrome/25.0.1364.160 Safari/537.22',
 ]
 
+
 class BaseParser(object):
     iata_code = None
     name = None
@@ -124,7 +159,7 @@ class BaseParser(object):
     }
 
     def __init__(self, iata_code, delay=2):
-        self.records = Timetable()
+        self.records = Timetable(iata_code)
         self.status = None
         self.delay = delay
         self.iata_code = iata_code
@@ -170,6 +205,9 @@ class BaseParser(object):
         self.records += list(self.parse(self.parse_html(content), **defaults))
 
     def run(self):
+        if self.records.load_from_cache():
+            return self.records
+
         # Airport website has separate pages for departure/arrival
         if self.is_multi_url:
             for _type, url in self.url.items():
@@ -184,11 +222,13 @@ class BaseParser(object):
                 self.parse_html(self.fetch_url(self.url)),
             )))
         self.set_status('OK')
+        self.records.save_to_cache()
         return self.records
 
     def run_async_glue(self):
         fetchers = {}
         executor = futures.ThreadPoolExecutor(max_workers=2)
+
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
                 fetcher = executor.submit(self.fetch_url, url, sleep=True)
@@ -203,10 +243,12 @@ class BaseParser(object):
 
     def run_async_return(self):
         futures.wait(self.run_async_glue())
+        executor = futures.ThreadPoolExecutor(max_workers=1)
         return self.records
 
     def run_async(self):
         executor = futures.ThreadPoolExecutor(max_workers=1)
+        executor.submit(self.records.save_to_cache)
         future = executor.submit(self.run_async_return)
         return future
 

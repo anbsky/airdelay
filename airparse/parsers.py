@@ -102,7 +102,7 @@ class Flight(dict):
 class Timetable(list):
     iata_code = None
     time_retrieved = None
-    cache_timeout = 30
+    cache_timeout = 180
 
     def __init__(self, iata_code, *args, **kwargs):
         self.iata_code = iata_code

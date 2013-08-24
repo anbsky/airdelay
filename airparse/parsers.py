@@ -54,12 +54,13 @@ class FlightEncoder(json.JSONEncoder):
 
 class Flight(dict):
     fields = ['origin', 'origin_name', 'destination', 'destination_name', 'number', 'airline',
-            'time_scheduled', 'date_actual', 'time_retrieved', 'status',
+            'time_scheduled', 'time_actual', 'time_retrieved', 'status',
             'is_codeshare', 'source']
+    time_fields = ['time_scheduled', 'time_actual', 'time_retrieved']
 
     def __init__(self, **kwargs):
         kwargs.setdefault('time_retrieved', datetime.now().replace(microsecond=0))
-        clean_data = self._cleanup(self._clean_kwargs(kwargs))
+        clean_data = self.clean(self._clean_kwargs(kwargs))
         strict_data = {f: clean_data[f] for f in set(self.fields) & set(clean_data.keys())}
         super(Flight, self).__init__(**strict_data)
 
@@ -71,7 +72,7 @@ class Flight(dict):
 
     def __setattr__(self, key, value):
         if key in self.fields:
-            self[key] = value
+            self[key] = self.clean_value(key, value)
         else:
             raise AttributeError(key)
 
@@ -87,9 +88,13 @@ class Flight(dict):
     def _clean_kwargs(kwargs):
         return dict(filter(lambda item: not(item[1] == ''), kwargs.items()))
 
-    @staticmethod
-    def _cleanup(data):
-        return data
+    def clean(self, data):
+        return {k: self.clean_value(k, v) for k, v in data.items()}
+
+    def clean_value(self, key, value):
+        if key in self.time_fields and isinstance(value, basestring):
+            value = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S')
+        return value
 
 
 class Timetable(list):
@@ -218,7 +223,7 @@ class DMEParser(BaseParser):
         'FL_NUM_PUB': 'number',
         'ORG': 'peer',
         'TIM_P': 'time_scheduled',
-        'TIM_L': 'date_actual',
+        'TIM_L': 'time_actual',
         'STATUS': 'raw_status',
     }
     _months = {
@@ -261,14 +266,14 @@ class DMEParser(BaseParser):
             is_codeshare = bool(self._codeshare_re.search(parsed_row['number']))
 
             time_scheduled = self._parse_time(parsed_row['time_scheduled'])
-            date_actual = self._parse_time(parsed_row['date_actual'])
+            time_actual = self._parse_time(parsed_row['time_actual'])
             status = self._parse_status(parsed_row['raw_status'])
             peer = re.sub(r'\(.+\)', '', parsed_row['peer'])
 
             f = Flight(
                 source=self.iata_code,
                 time_scheduled=time_scheduled,
-                date_actual=date_actual,
+                time_actual=time_actual,
                 status=status,
                 number=parsed_row['number'],
                 is_codeshare=is_codeshare
@@ -320,7 +325,7 @@ class SVOParser(BaseParser):
 
             f = Flight(
                 time_scheduled=self._parse_time(' '.join(raw[:2])),
-                date_actual=self._parse_actual(raw[7]),
+                time_actual=self._parse_actual(raw[7]),
                 status=self._parse_status(raw_cells[7]),
                 number=' '.join(raw[2:4]),
                 source=self.iata_code

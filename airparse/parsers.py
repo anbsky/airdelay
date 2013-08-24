@@ -15,6 +15,8 @@ import redis
 
 from codes import find_airport_code, find_airport_name
 
+r = redis.StrictRedis()
+
 
 class ParserRegistry(dict):
     def add(self, iata_code, klass):
@@ -109,7 +111,6 @@ class Timetable(list):
         super(Timetable, self).__init__(*args, **kwargs)
 
     def load_from_cache(self):
-        r = redis.StrictRedis()
         try:
             cached_timetable = r.get('airport_cache:' + self.iata_code)
             loaded_timetable = self.from_json(self.iata_code, cached_timetable)
@@ -122,7 +123,6 @@ class Timetable(list):
         return False
 
     def save_to_cache(self):
-        r = redis.StrictRedis()
         if r.exists('airport_cache:' + self.iata_code):
             return
         r.set('airport_cache:' + self.iata_code, self.to_json())

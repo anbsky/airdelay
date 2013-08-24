@@ -31,7 +31,7 @@ class IndexHandler(tornado.web.RequestHandler):
             self.finish()
         else:
             records = yield parser.run_async()
-            self.write(parser.to_json(records))
+            self.write(records.to_json())
 
             self.set_header('Content-Type', 'application/json')
             self.finish()

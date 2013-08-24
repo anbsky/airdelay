@@ -92,6 +92,11 @@ class Flight(dict):
         return data
 
 
+class Timetable(list):
+    def to_json(self):
+        return json.dumps(self, cls=FlightEncoder)
+
+
 _agents = [
     'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Win64; x64; Trident/6.0)',
     'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Win64; x64; Trident/4.0; .NET CLR 2.0.50727; SLCC2; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; Tablet PC 2.0)',
@@ -114,7 +119,7 @@ class BaseParser(object):
     }
 
     def __init__(self, iata_code, delay=2):
-        self.records = []
+        self.records = Timetable()
         self.status = None
         self.delay = delay
         self.iata_code = iata_code
@@ -202,9 +207,6 @@ class BaseParser(object):
 
     def parse(self, content, **defaults):
         raise NotImplementedError
-
-    def to_json(self, records=None):
-        return json.dumps(records or self.records, cls=FlightEncoder)
 
 
 class DMEParser(BaseParser):

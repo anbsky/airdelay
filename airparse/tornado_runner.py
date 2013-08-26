@@ -14,10 +14,19 @@ import time
 from tornado.options import define, options
 import tornado.gen
 import functools
+import os
 
 from parsers import parsers
 
+
 define("port", default=8000, help="run on the given port", type=int)
+static_root = os.path.join(os.path.dirname(__file__), '..', 'static')
+template_root = os.path.join(os.path.dirname(__file__), '..', 'templates')
+
+
+class HomeHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.render('index.html')
 
 
 class AirportsHandler(tornado.web.RequestHandler):
@@ -41,11 +50,14 @@ class AirportsHandler(tornado.web.RequestHandler):
             self.finish()
 
 
+app = tornado.web.Application(handlers=[
+    (r'/airports/(.+?)/(?:(.+?)/)?$', AirportsHandler),
+    (r'/', HomeHandler),
+], template_path=template_root, static_path=static_root, debug=True)
+
+
 if __name__ == '__main__':
     tornado.options.parse_command_line()
-    app = tornado.web.Application(handlers=[
-        (r'/airports/(.+?)/(?:(.+?)/)?$', AirportsHandler),
-    ], debug=True)
     http_server = tornado.httpserver.HTTPServer(app)
     http_server.listen(options.port)
     tornado.ioloop.IOLoop.instance().start()

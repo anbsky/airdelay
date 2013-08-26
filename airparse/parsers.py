@@ -10,6 +10,8 @@ import json
 import requests
 import time
 from concurrent import futures
+import sys
+import traceback
 from requests_futures.sessions import FuturesSession
 import redis
 
@@ -58,8 +60,8 @@ def flight_decoder(dct):
 
 class Flight(dict):
     fields = ['origin', 'origin_name', 'destination', 'destination_name', 'number', 'airline',
-            'time_scheduled', 'time_actual', 'time_retrieved', 'status',
-            'is_codeshare', 'source']
+              'time_scheduled', 'time_actual', 'time_retrieved', 'status',
+              'is_codeshare', 'source']
     time_fields = ['time_scheduled', 'time_actual', 'time_retrieved']
 
     def __init__(self, **kwargs):
@@ -117,6 +119,8 @@ class Timetable(list):
         except (ValueError, TypeError):
             pass
         else:
+            if not len(loaded_timetable):
+                return False
             del self[:]
             self.extend(loaded_timetable)
             return True
@@ -207,7 +211,11 @@ class BaseParser(object):
         return BeautifulSoup(html)
 
     def parse_async(self, content, **defaults):
-        self.records += list(self.parse(self.parse_html(content), **defaults))
+        try:
+            self.records += list(self.parse(self.parse_html(content), **defaults))
+        except:
+            print 'error while parsing {}:\n'.format(self.iata_code)
+            traceback.print_exception(*sys.exc_info())
 
     def run(self):
         if self.records.load_from_cache():
@@ -232,12 +240,17 @@ class BaseParser(object):
 
     def run_async_parsers(self):
         fetchers = {}
-        executor = futures.ThreadPoolExecutor(max_workers=2)
+        executor = futures.ThreadPoolExecutor(max_workers=6)
 
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
-                fetcher = executor.submit(self.fetch_url, url, sleep=True)
-                fetchers[fetcher] = _type
+                if isinstance(url, (list, tuple)):
+                    for _url in url:
+                        fetcher = executor.submit(self.fetch_url, _url, sleep=True)
+                        fetchers[fetcher] = _type
+                else:
+                    fetcher = executor.submit(self.fetch_url, url, sleep=True)
+                    fetchers[fetcher] = _type
                 # time.sleep(self.delay)
         else:
             fetchers[executor.submit(self.fetch_url, self.url)] = 'all'
@@ -433,7 +446,7 @@ class VKOParser(BaseParser):
                 airport = raw[3]
             elif defaults.get('type') == 'inbound':
                 airport = raw[2]
-            airport = re.sub(r'\s?\(.+\)', '', airport.replace('\n', ' ')).strip().capitalize()
+            airport = re.sub(r'\s?\(.+\)', '', airport.replace('\n', ' ')).strip().title()
 
             f = Flight(
                 source=self.iata_code,
@@ -442,7 +455,7 @@ class VKOParser(BaseParser):
                 status=self._parse_status(raw[4]),
                 number=raw[0].strip(),
                 destination=self.iata_code,
-                airline=raw[1].strip().capitalize(),
+                airline=raw[1].strip().title(),
                 **defaults
             )
 
@@ -455,7 +468,6 @@ class VKOParser(BaseParser):
 
             yield f
 
-
     def _parse_time(self, cell):
         time_str = ' '.join(list(cell.stripped_strings))
         if len(time_str) < 11:
@@ -467,9 +479,70 @@ class VKOParser(BaseParser):
         return self._statuses.get(value)
 
 
+class LEDParser(BaseParser):
+    url = {
+        'outbound': [
+            'http://www.pulkovoairport.ru/eng/online_serves/online_timetable/departures/',
+            'http://www.pulkovoairport.ru/eng/online_serves/online_timetable/departures/?p=2'
+        ],
+        'inbound': [
+            'http://www.pulkovoairport.ru/eng/online_serves/online_timetable/arrivals/',
+            'http://www.pulkovoairport.ru/eng/online_serves/online_timetable/arrivals/?p=2',
+        ]
+    }
+
+    def parse(self, soup, **defaults):
+        re_airport = re.compile(r'(\w+)\s+\((\w+)\)')
+        statuses = {
+            'departed': FlightStatus.DEPARTED,
+            'arrived': FlightStatus.LANDED,
+            'cancelled': FlightStatus.CANCELLED,
+        }
+
+        def parse_time(time_str):
+            if not time_str:
+                return None
+            return parser.parse(time_str, dayfirst=True)
+
+        for row in soup.find('table', {'class': 'tabloBigNew'}).find_all('tr', recursive=False):
+            if 'bigTableTitle' in row.get('class', []) or 'onlineDetailTr' in row.get('class', []):
+                continue
+            raw_cells = row.find_all('td')
+            raw_strings = map(lambda s: s.strip() if s else s, [cell.string for cell in raw_cells])
+            if not len(raw_strings) >= 6:
+                continue
+
+            f = Flight(
+                source=self.iata_code,
+                time_scheduled=parse_time(raw_strings[2]),
+                time_actual=parse_time(raw_strings[3]),
+                status=statuses.get(raw_strings[4]),
+                number=raw_strings[0],
+                destination=self.iata_code,
+                airline=raw_strings[5],
+                **defaults
+            )
+
+            airport_match = re_airport.match(raw_strings[1])
+            if airport_match:
+                airport_city, airport_iata_code = airport_match.groups()
+            else:
+                airport_city, airport_iata_code = raw_strings[1], None
+
+            if defaults['type'] == 'outbound':
+                f.set_origin(self.name, self.iata_code)
+                f.set_destination(airport_city, airport_iata_code)
+            else:
+                f.set_origin(airport_city, airport_iata_code)
+                f.set_destination(self.name, self.iata_code)
+
+            yield f
+
+
 parsers.add('DME', DMEParser)
 parsers.add('SVO', SVOParser)
 parsers.add('VKO', VKOParser)
+parsers.add('LED', LEDParser)
 
 
 def do_import():

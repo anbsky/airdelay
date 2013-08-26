@@ -26,8 +26,12 @@ class IndexHandler(tornado.web.RequestHandler):
         client = tornado.httpclient.AsyncHTTPClient()
         try:
             parser = parsers.initialize(iata_code)
-        except KeyError:
-            self.write(json.dumps({'status': 'error', 'message': 'no such airport found'}))
+        except TypeError:
+            self.set_status(404)
+            self.write({
+                'status': 'error',
+                'message': 'Airport {} not found'.format(iata_code)
+            })
             self.finish()
         else:
             records = yield parser.run_async()

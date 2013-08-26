@@ -20,7 +20,7 @@ from parsers import parsers
 define("port", default=8000, help="run on the given port", type=int)
 
 
-class IndexHandler(tornado.web.RequestHandler):
+class AirportsHandler(tornado.web.RequestHandler):
     @tornado.gen.coroutine
     def get(self, iata_code, _type=None):
         client = tornado.httpclient.AsyncHTTPClient()
@@ -44,7 +44,7 @@ class IndexHandler(tornado.web.RequestHandler):
 if __name__ == '__main__':
     tornado.options.parse_command_line()
     app = tornado.web.Application(handlers=[
-        (r'/airports/(.+?)/(?:(.+?)/)?$', IndexHandler),
+        (r'/airports/(.+?)/(?:(.+?)/)?$', AirportsHandler),
     ], debug=True)
     http_server = tornado.httpserver.HTTPServer(app)
     http_server.listen(options.port)

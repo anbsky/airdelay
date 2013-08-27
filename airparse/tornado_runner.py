@@ -16,7 +16,7 @@ import tornado.gen
 import functools
 import os
 
-from parsers import parsers
+from parsers import registry
 
 
 define("port", default=8000, help="run on the given port", type=int)
@@ -34,7 +34,7 @@ class AirportsHandler(tornado.web.RequestHandler):
     def get(self, iata_code, _type=None):
         client = tornado.httpclient.AsyncHTTPClient()
         try:
-            parser = parsers.initialize(iata_code)
+            parser = registry.initialize(iata_code)
         except TypeError:
             self.set_status(404)
             self.write({

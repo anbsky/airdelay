@@ -5,7 +5,7 @@ from __future__ import print_function
 import json
 from flask import Flask, after_this_request
 
-from parsers import parsers
+from parsers import registry
 
 
 app = Flask(__name__)
@@ -17,7 +17,7 @@ def timetable(iata_code):
         response.headers['Content-type'] = 'application/json'
         return response
 
-    parser = parsers.initialize(iata_code)
+    parser = registry.initialize(iata_code)
     records = parser.run()
     return records.to_json()
 

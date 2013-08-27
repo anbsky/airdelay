@@ -24,7 +24,7 @@ class ParserRegistry(dict):
         except KeyError:
             raise Exception('airport {} not found'.format(iata_code))
 
-parsers = ParserRegistry()
+registry = ParserRegistry()
 
 
 class DMEParser(BaseParser):

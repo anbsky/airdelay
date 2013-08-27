@@ -235,7 +235,7 @@ class LEDParser(BaseParser):
             if 'bigTableTitle' in row.get('class', []) or 'onlineDetailTr' in row.get('class', []):
                 continue
             raw_cells = row.find_all('td')
-            raw_strings = map(lambda s: s.strip() if s else s, [cell.string for cell in raw_cells])
+            raw_strings = map(lambda s: s.strip() if s else s, [cell.get_text() for cell in raw_cells])
             if not len(raw_strings) >= 6:
                 continue
 

@@ -204,8 +204,7 @@ class BaseParser(object):
     def sleep(self):
         time.sleep(self.delay)
 
-    def fetch_url(self, url, sleep=False):
-        if sleep: self.sleep()
+    def fetch_url(self, url):
         return requests.get(url, headers=self.get_request_headers())
 
     def fetch_url_async(self, url, sleep=False):
@@ -247,17 +246,8 @@ class BaseParser(object):
         # getter = partial(session.request, 'get',
         #                  background_callback=lambda s, r: self.parse_html(r))
 
-        # for type_, urls in self.urls.items():
-        #     for url in urls:
-        #         fetcher = executor.submit(self.fetch_url, _url, sleep=False)
-        #         # fetcher = session.request('get', _url, background_callback=lambda r: self.parse_html(r.content))
-        #         # fetcher = getter(url=_url)
-        #         fetchers[fetcher] = _type
-        # # else:
-        # #     fetchers[executor.submit(self.fetch_url, self.url, sleep=False)] = 'all'
-
         for type_, urls in self.urls.items():
-            fetchers.update(map(lambda url: (executor.submit(self.fetch_url, url, sleep=False), type_), urls))
+            fetchers.update(map(lambda url: (executor.submit(self.fetch_url, url), type_), urls))
 
         parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
                    for fetcher in futures.as_completed(fetchers)]

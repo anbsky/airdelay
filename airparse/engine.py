@@ -8,6 +8,7 @@ import sys
 import time
 import traceback
 from functools import partial
+from urlparse import urlparse
 
 from bs4 import BeautifulSoup
 from concurrent import futures
@@ -171,6 +172,42 @@ class Timetable(object):
         return self
 
 
+class Throttler(object):
+    def __init__(self, delay=2):
+        self.delay = delay
+        self.domains_last_called = {}
+
+    def get_domain(self, url):
+        return urlparse(url).netloc
+
+    def get_last_called(self, url):
+        domain = self.get_domain(url)
+        return self.domains_last_called.get(domain, None) if domain else None
+
+    def set_last_called(self, url, time_):
+        domain = self.get_domain(url)
+        if domain:
+            self.domains_last_called[domain] = time_
+
+    def sleep(self):
+        time.sleep(self.delay)
+
+    def __call__(self, func, *args, **kwargs):
+        def wrapper(self_, url, *func_args, **func_kwargs):
+            last_called = self.get_last_called(url)
+            now = time.time()
+            self.set_last_called(url, now)
+            print('last_called: {}, now: {}'.format(last_called, now))
+            if last_called and now - last_called < self.delay:
+                print('delayin!!')
+                self.sleep()
+            return func(self_, url, *func_args, **func_kwargs)
+        return wrapper
+
+
+throttle_requests = Throttler()
+
+
 class BaseParser(object):
     '''
     Base class for all parsers containing asynchronous running methods.
@@ -187,10 +224,8 @@ class BaseParser(object):
         'Accept-Language': 'en-US',
     }
 
-    def __init__(self, iata_code, delay=2):
+    def __init__(self, iata_code):
         self.records = Timetable(iata_code)
-        self.status = None
-        self.delay = delay
         self.iata_code = iata_code
         self.name = find_airport_name(iata_code)
 
@@ -209,9 +244,7 @@ class BaseParser(object):
     def set_status(self, value):
         self.metadata['status'] = value
 
-    def sleep(self):
-        time.sleep(self.delay)
-
+    # @throttle_requests
     def fetch_url(self, url):
         return requests.get(url, headers=self.get_request_headers())
 

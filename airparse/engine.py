@@ -254,7 +254,7 @@ class BaseParser(object):
 
     def run_async_parsers(self):
         fetchers = {}
-        executor = futures.ThreadPoolExecutor(max_workers=4)
+        executor = futures.ThreadPoolExecutor(max_workers=6)
         session = FuturesSession(executor)
         session.headers.update(self.get_request_headers())
         getter = partial(session.request, 'get',

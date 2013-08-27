@@ -1,6 +1,6 @@
 # Parser for airport websites, written in Python.
 
-Works as a Tornado application, spits out JSON. Tries to run asynchronously whenever possible by using *concurrent.futures* (backport to Python 2.x).
+Works as a Tornado application, spits out JSON. Tries to run asynchronously whenever possible by using *concurrent.futures* (back-ported to Python 2.x).
 Results are cached in Redis so it doesn't hit ariport website on every request.
 
 ## Example output

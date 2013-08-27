@@ -29,6 +29,11 @@
                 position: absolute;
                 bottom: 30px;
             }
+            .comment {
+                font-size: 80%;
+                font-style: italic;
+                color: #e2e6e8;
+            }
         </style>
     </head>
 
@@ -36,20 +41,24 @@
         <h1>Real-time airports timetable in JSON</h1>
         <p>$ curl http://airdelay.info/airports/SVO/</p>
         <pre><code>
-[
-   {
-      "status": "landed",
-      "time_retrieved": "2013-08-27T12:10:32",
-      "destination": "SVO",
-      "source": "SVO",
-      "origin_name": "Larnaca",
-      "destination_name": "Sheremetyevo",
-      "time_actual": "2013-08-27T23:52:00",
-      "number": "CY 1774",
-      "origin": "LCA",
-      "time_scheduled": "2013-08-27T00:05:00"
-   }
-]
+{
+   "iata_code": "SVO",
+   "time_retrieved": "2013-08-27T13:25:37",
+   "name": "Sheremetyevo",
+   "flights": [
+      {
+         "status": "landed",
+         "origin": "LCA",
+         "origin_name": "Larnaca",
+         "destination": "SVO",
+         "destination_name": "Sheremetyevo",
+         "number": "CY 1774",
+         "time_actual": "2013-08-27T23:52:00",
+         "time_scheduled": "2013-08-27T00:05:00"
+      },
+      ...
+   ]
+}
         </code></pre>
 
         <p>

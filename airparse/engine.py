@@ -122,26 +122,25 @@ class Timetable(object):
         self.time_retrieved = datetime.now().replace(microsecond=0)
         super(Timetable, self).__init__(*args, **kwargs)
 
+    @property
+    def _cache_key(self):
+        return 'airport_cache:' + self.iata_code
+
+    def is_in_cache(self):
+        return r.exists(self._cache_key)
+
+    def get_raw_from_cache(self):
+        return r.get(self._cache_key)
+
     def load_from_cache(self):
-        try:
-            cached_timetable = r.get('airport_cache:' + self.iata_code)
-            loaded_timetable = self.from_json(cached_timetable)
-        except (ValueError, TypeError):
-            pass
-        else:
-            if not len(loaded_timetable):
-                return False
-            self.flights = loaded_timetable['flights']
-            self.time_retrieved = loaded_timetable['time_retrieved']
-            return True
-        return False
+        cached_timetable = self.get_raw_from_cache()
+        return self.set_from_json(cached_timetable)
 
     def save_to_cache(self):
-        print('saving to cache!')
-        if r.exists('airport_cache:' + self.iata_code):
+        if self.is_in_cache():
             return
-        r.set('airport_cache:' + self.iata_code, self.to_json())
-        r.expire('airport_cache:' + self.iata_code, self.cache_timeout)
+        r.set(self._cache_key, self.to_json())
+        r.expire(self._cache_key, self.cache_timeout)
 
     def to_dict(self):
         return {
@@ -150,6 +149,15 @@ class Timetable(object):
             'time_retrieved': self.time_retrieved,
             'flights': self.flights
         }
+
+    def set_from_json(self, raw):
+        try:
+            loaded_timetable = self.from_json(raw)
+            self.flights = loaded_timetable['flights']
+            self.time_retrieved = loaded_timetable['time_retrieved']
+        except (ValueError, TypeError, KeyError):
+            return False
+        return True
 
     @classmethod
     def from_json(cls, json_string):
@@ -254,9 +262,10 @@ class BaseParser(object):
                        for fetcher in futures.as_completed(fetchers)]
         return parsers
 
-    def get_async_results(self, parsers=None):
-        if parsers:
-            futures.wait(parsers)
+    def get_async_results(self, retrievers=None):
+        """Waits while data retrieval futures finish their job or returns records right away"""
+        if retrievers:
+            futures.wait(retrievers)
         return self.records
 
     def run_async(self):

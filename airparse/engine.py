@@ -137,6 +137,7 @@ class Timetable(object):
         return False
 
     def save_to_cache(self):
+        print('saving to cache!')
         if r.exists('airport_cache:' + self.iata_code):
             return
         r.set('airport_cache:' + self.iata_code, self.to_json())
@@ -238,39 +239,35 @@ class BaseParser(object):
         self.records.save_to_cache()
         return self.records
 
-    def run_async_parsers(self):
+    def get_async_parsers(self):
         fetchers = {}
-        executor = futures.ThreadPoolExecutor(max_workers=6)
-        session = FuturesSession(executor)
-        session.headers.update(self.get_request_headers())
-        # getter = partial(session.request, 'get',
-        #                  background_callback=lambda s, r: self.parse_html(r))
+        with futures.ThreadPoolExecutor(max_workers=6) as executor:
+            session = FuturesSession(executor)
+            session.headers.update(self.get_request_headers())
+            # getter = partial(session.request, 'get',
+            #                  background_callback=lambda s, r: self.parse_html(r))
 
-        for type_, urls in self.urls.items():
-            fetchers.update(map(lambda url: (executor.submit(self.fetch_url, url), type_), urls))
+            for type_, urls in self.urls.items():
+                fetchers.update(map(lambda url: (executor.submit(self.fetch_url, url), type_), urls))
 
-        parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
-                   for fetcher in futures.as_completed(fetchers)]
+            parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
+                       for fetcher in futures.as_completed(fetchers)]
         return parsers
 
-    # def run_async_glue(self):
-    #     executor = futures.ThreadPoolExecutor(max_workers=2)
-    #     return executor.submit(self.records.load_from_cache)
-    #     futures.as_completed(load_result)
-    #     return executor.submit(self.run_async_parsers)
-
-
-    def run_async_return(self):
-        executor = futures.ThreadPoolExecutor(max_workers=2)
-        if not self.records.load_from_cache():
-            futures.wait(self.run_async_parsers())
-        self.records.save_to_cache()
+    def get_async_results(self, parsers=None):
+        if parsers:
+            futures.wait(parsers)
         return self.records
 
     def run_async(self):
-        executor = futures.ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(self.run_async_return)
-        return future
+        with futures.ThreadPoolExecutor(max_workers=2) as executor:
+            cache_hit = executor.submit(self.records.load_from_cache)
+            if not cache_hit.result():
+                future_results = executor.submit(self.get_async_results, self.get_async_parsers())
+                future_results.add_done_callback(lambda f: self.records.save_to_cache())
+                return future_results
+            else:
+                return executor.submit(self.get_async_results)
 
     def parse(self, content, **defaults):
         raise NotImplementedError

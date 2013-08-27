@@ -172,7 +172,7 @@ class BaseParser(object):
     '''
     iata_code = None
     name = None
-    url = None
+    urls = None
     client = None
     request_headers = {
         'Accept-Language': 'en-US',
@@ -200,10 +200,6 @@ class BaseParser(object):
 
     def set_status(self, value):
         self.metadata['status'] = value
-
-    @property
-    def is_multi_url(self):
-        return isinstance(self.url, dict)
 
     def sleep(self):
         time.sleep(self.delay)
@@ -260,21 +256,17 @@ class BaseParser(object):
         # getter = partial(session.request, 'get',
         #                  background_callback=lambda s, r: self.parse_html(r))
 
-        if isinstance(self.url, dict):
-            for _type, url in self.url.items():
-                if isinstance(url, (list, tuple)):
-                    for _url in url:
-                        fetcher = executor.submit(self.fetch_url, _url, sleep=False)
-                        # fetcher = session.request('get', _url, background_callback=lambda r: self.parse_html(r.content))
-                        # fetcher = getter(url=_url)
-                        fetchers[fetcher] = _type
-                else:
-                    # fetcher = getter(url=url)
-                    fetcher = executor.submit(self.fetch_url, url, sleep=False)
-                    fetchers[fetcher] = _type
-                # time.sleep(self.delay)
-        else:
-            fetchers[executor.submit(self.fetch_url, self.url, sleep=False)] = 'all'
+        # for type_, urls in self.urls.items():
+        #     for url in urls:
+        #         fetcher = executor.submit(self.fetch_url, _url, sleep=False)
+        #         # fetcher = session.request('get', _url, background_callback=lambda r: self.parse_html(r.content))
+        #         # fetcher = getter(url=_url)
+        #         fetchers[fetcher] = _type
+        # # else:
+        # #     fetchers[executor.submit(self.fetch_url, self.url, sleep=False)] = 'all'
+
+        for type_, urls in self.urls.items():
+            fetchers.update(map(lambda url: (executor.submit(self.fetch_url, url, sleep=False), type_), urls))
 
         parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
                    for fetcher in futures.as_completed(fetchers)]

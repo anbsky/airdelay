@@ -11,9 +11,9 @@ from engine import FlightStatus, Flight, BaseParser
 
 
 class DMEParser(BaseParser):
-    url = {
-        'outbound': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E',
-        'inbound': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloArrival_E'
+    urls = {
+        'outbound': ['http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E'],
+        'inbound': ['http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloArrival_E']
     }
     _targets = {
         'FL_NUM_PUB': 'number',
@@ -97,7 +97,9 @@ class DMEParser(BaseParser):
 
 
 class SVOParser(BaseParser):
-    url = 'http://svo.aero/en/tt/'
+    urls = {
+        'all': ['http://svo.aero/en/tt/']
+    }
     _statuses = {
         'sL': FlightStatus.LANDED,
         'sE': FlightStatus.DELAYED,
@@ -154,9 +156,9 @@ class SVOParser(BaseParser):
 
 
 class VKOParser(BaseParser):
-    url = {
-        'outbound': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=1',
-        'inbound': 'http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=0'
+    urls = {
+        'outbound': ['http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=1'],
+        'inbound': ['http://vnukovo.ru/eng/for-passengers/board/index.wbp?time-table.direction=0']
     }
     _statuses = {
         'departed': FlightStatus.DEPARTED,
@@ -207,7 +209,7 @@ class VKOParser(BaseParser):
 
 
 class LEDParser(BaseParser):
-    url = {
+    urls = {
         'outbound': [
             'http://www.pulkovoairport.ru/eng/online_serves/online_timetable/departures/',
             'http://www.pulkovoairport.ru/eng/online_serves/online_timetable/departures/?p=2'
@@ -270,7 +272,8 @@ class ParserRegistry(dict):
     def add(self, iata_code, klass):
         if iata_code in self.keys():
             raise NameError('Crawler for {} already registered'.format(iata_code))
-        assert getattr(klass, 'url'), 'Cannot register a crawler without URL'
+        assert getattr(klass, 'urls'), 'Cannot register a crawler without URLs'
+        assert isinstance(klass.urls, dict), 'urls property should be a dict'
         self[iata_code] = klass
 
     def initialize(self, iata_code):

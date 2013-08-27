@@ -7,6 +7,8 @@ from random import randint
 import sys
 import time
 import traceback
+from functools import partial
+
 from bs4 import BeautifulSoup
 from concurrent import futures
 import requests
@@ -191,10 +193,10 @@ class BaseParser(object):
             'flights': self.records
         }
 
+        self.request_headers['User-Agent'] = _agents[randint(0, len(_agents) - 1)]
+
     def get_request_headers(self):
-        headers = self.request_headers
-        headers['User-Agent'] = _agents[randint(0, len(_agents) - 1)]
-        return headers
+        return self.request_headers
 
     def set_status(self, value):
         self.metadata['status'] = value
@@ -215,8 +217,11 @@ class BaseParser(object):
         return self._session.get(url, headers=self.get_request_headers())
 
     def parse_html(self, response):
-        # Tornado Async client or Requests
-        html = getattr(response, 'body', response.content)
+        # Tornado Async client or Requests or just plain html
+        if isinstance(response, basestring):
+            html = response
+        else:
+            html = getattr(response, 'body', response.content)
         return BeautifulSoup(html)
 
     def parse_async(self, content, **defaults):
@@ -249,20 +254,26 @@ class BaseParser(object):
 
     def run_async_parsers(self):
         fetchers = {}
-        executor = futures.ThreadPoolExecutor(max_workers=6)
+        executor = futures.ThreadPoolExecutor(max_workers=4)
+        session = FuturesSession(executor)
+        session.headers.update(self.get_request_headers())
+        getter = partial(session.request, 'get',
+                         background_callback=lambda s, r: self.parse_html(r))
 
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
                 if isinstance(url, (list, tuple)):
                     for _url in url:
-                        fetcher = executor.submit(self.fetch_url, _url, sleep=True)
+                        # fetcher = executor.submit(self.fetch_url, _url, sleep=True)
+                        # fetcher = session.request('get', _url, background_callback=lambda r: self.parse_html(r.content))
+                        fetcher = getter(url=_url)
                         fetchers[fetcher] = _type
                 else:
-                    fetcher = executor.submit(self.fetch_url, url, sleep=True)
+                    fetcher = getter(url=url)
                     fetchers[fetcher] = _type
                 # time.sleep(self.delay)
         else:
-            fetchers[executor.submit(self.fetch_url, self.url)] = 'all'
+            fetchers[getter(url=self.url)] = 'all'
 
         parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
                    for fetcher in futures.as_completed(fetchers)]

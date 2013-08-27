@@ -55,17 +55,19 @@ class FlightEncoder(json.JSONEncoder):
 
 
 def flight_decoder(dct):
-    return Flight(**dct)
+    'Decodes flight entries to Flight objects, leaves other dicts as is'
+    if 'origin' in dct:
+        return Flight(**dct)
+    return dct
+
 
 
 class Flight(dict):
     fields = ['origin', 'origin_name', 'destination', 'destination_name', 'number', 'airline',
-              'time_scheduled', 'time_actual', 'time_retrieved', 'status',
-              'is_codeshare', 'source']
-    time_fields = ['time_scheduled', 'time_actual', 'time_retrieved']
+              'time_scheduled', 'time_actual', 'status', 'is_codeshare']
+    time_fields = ['time_scheduled', 'time_actual']
 
     def __init__(self, **kwargs):
-        kwargs.setdefault('time_retrieved', datetime.now().replace(microsecond=0))
         clean_data = self.clean(self._clean_kwargs(kwargs))
         strict_data = {f: clean_data[f] for f in set(self.fields) & set(clean_data.keys())}
         super(Flight, self).__init__(**strict_data)
@@ -103,26 +105,30 @@ class Flight(dict):
         return value
 
 
-class Timetable(list):
+class Timetable(object):
+    'Holds Flights collection and a bit of metadata'
     iata_code = None
     time_retrieved = None
     cache_timeout = 180
+    flights = None
 
     def __init__(self, iata_code, *args, **kwargs):
         self.iata_code = iata_code
+        self.flights = []
+        self.time_retrieved = datetime.now().replace(microsecond=0)
         super(Timetable, self).__init__(*args, **kwargs)
 
     def load_from_cache(self):
         try:
             cached_timetable = r.get('airport_cache:' + self.iata_code)
-            loaded_timetable = self.from_json(self.iata_code, cached_timetable)
+            loaded_timetable = self.from_json(cached_timetable)
         except (ValueError, TypeError):
             pass
         else:
             if not len(loaded_timetable):
                 return False
-            del self[:]
-            self.extend(loaded_timetable)
+            self.flights = loaded_timetable['flights']
+            self.time_retrieved = loaded_timetable['time_retrieved']
             return True
         return False
 
@@ -132,12 +138,23 @@ class Timetable(list):
         r.set('airport_cache:' + self.iata_code, self.to_json())
         r.expire('airport_cache:' + self.iata_code, self.cache_timeout)
 
+    def to_dict(self):
+        return {
+            'iata_code': self.iata_code,
+            'time_retrieved': self.time_retrieved,
+            'flights': self.flights
+        }
+
     @classmethod
-    def from_json(cls, iata_code, json_string):
-        return cls(iata_code, json.loads(json_string, object_hook=flight_decoder))
+    def from_json(cls, json_string):
+        return json.loads(json_string, object_hook=flight_decoder)
 
     def to_json(self):
-        return json.dumps(self, cls=FlightEncoder)
+        return json.dumps(self.to_dict(), cls=FlightEncoder)
+
+    def __add__(self, other):
+        self.flights.extend(other)
+        return self
 
 
 class BaseParser(object):

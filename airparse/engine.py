@@ -231,20 +231,11 @@ class BaseParser(object):
         if self.records.load_from_cache():
             return self.records
 
-        # Airport website has separate pages for departure/arrival
-        if self.is_multi_url:
-            for _type, url in self.url.items():
-                self.records += list(self.parse(
-                    self.parse_html(self.fetch_url(url)),
-                    type=_type
-                ))
-                self.sleep()
-        # Single page
-        else:
-            self.records += list(self.parse(self.parse_html(
-                self.parse_html(self.fetch_url(self.url)),
-            )))
-        self.set_status('OK')
+        for type_, urls in self.urls.items():
+            for results in map(lambda url: list(self.parse(self.parse_html(self.fetch_url(url)), type=type_)), urls):
+                self.records += results
+
+        # self.set_status('OK')
         self.records.save_to_cache()
         return self.records
 

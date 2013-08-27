@@ -108,6 +108,7 @@ class Flight(dict):
 class Timetable(object):
     'Holds Flights collection and a bit of metadata'
     iata_code = None
+    name = None
     time_retrieved = None
     cache_timeout = 180
     flights = None
@@ -115,6 +116,7 @@ class Timetable(object):
     def __init__(self, iata_code, *args, **kwargs):
         self.iata_code = iata_code
         self.flights = []
+        self.name = find_airport_name(iata_code)
         self.time_retrieved = datetime.now().replace(microsecond=0)
         super(Timetable, self).__init__(*args, **kwargs)
 
@@ -141,6 +143,7 @@ class Timetable(object):
     def to_dict(self):
         return {
             'iata_code': self.iata_code,
+            'name': self.name,
             'time_retrieved': self.time_retrieved,
             'flights': self.flights
         }

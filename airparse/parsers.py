@@ -10,23 +10,6 @@ import redis
 from engine import FlightStatus, Flight, BaseParser
 
 
-class ParserRegistry(dict):
-    def add(self, iata_code, klass):
-        if iata_code in self.keys():
-            raise NameError('Crawler for {} already registered'.format(iata_code))
-        assert getattr(klass, 'url'), 'Cannot register a crawler without URL'
-        self[iata_code] = klass
-
-    def initialize(self, iata_code):
-        try:
-            klass = self.get(iata_code)
-            return klass(iata_code)
-        except KeyError:
-            raise Exception('airport {} not found'.format(iata_code))
-
-registry = ParserRegistry()
-
-
 class DMEParser(BaseParser):
     url = {
         'outbound': 'http://www.domodedovo.ru/onlinetablo/default.aspx?tabloname=TabloDeparture_E',
@@ -283,10 +266,25 @@ class LEDParser(BaseParser):
             yield f
 
 
-parsers.add('DME', DMEParser)
-parsers.add('SVO', SVOParser)
-parsers.add('VKO', VKOParser)
-parsers.add('LED', LEDParser)
+class ParserRegistry(dict):
+    def add(self, iata_code, klass):
+        if iata_code in self.keys():
+            raise NameError('Crawler for {} already registered'.format(iata_code))
+        assert getattr(klass, 'url'), 'Cannot register a crawler without URL'
+        self[iata_code] = klass
+
+    def initialize(self, iata_code):
+        try:
+            klass = self.get(iata_code)
+            return klass(iata_code)
+        except KeyError:
+            raise Exception('airport {} not found'.format(iata_code))
+
+registry = ParserRegistry()
+registry.add('DME', DMEParser)
+registry.add('SVO', SVOParser)
+registry.add('VKO', VKOParser)
+registry.add('LED', LEDParser)
 
 
 def do_import():

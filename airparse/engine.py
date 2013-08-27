@@ -55,14 +55,14 @@ class FlightEncoder(json.JSONEncoder):
 
 
 def flight_decoder(dct):
-    'Decodes flight entries to Flight objects, leaves other dicts as is'
+    '''Decodes flight entries to Flight objects, leaves other dicts as is'''
     if 'origin' in dct:
         return Flight(**dct)
     return dct
 
 
-
 class Flight(dict):
+    '''Enhanced dictionary for holding timetable entries'''
     fields = ['origin', 'origin_name', 'destination', 'destination_name', 'number', 'airline',
               'time_scheduled', 'time_actual', 'status', 'is_codeshare']
     time_fields = ['time_scheduled', 'time_actual']
@@ -106,7 +106,7 @@ class Flight(dict):
 
 
 class Timetable(object):
-    'Holds Flights collection and a bit of metadata'
+    '''Holds Flights collection and a bit of metadata'''
     iata_code = None
     name = None
     time_retrieved = None
@@ -161,6 +161,13 @@ class Timetable(object):
 
 
 class BaseParser(object):
+    '''
+    Base class for all parsers containing asynchronous running methods.
+    Inheriting classes need to define only one method:
+    def parse(self, **defaults)
+        ...
+        yield Flight(...)
+    '''
     iata_code = None
     name = None
     url = None
@@ -260,7 +267,6 @@ class BaseParser(object):
         parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
                    for fetcher in futures.as_completed(fetchers)]
         return parsers
-
 
     # def run_async_glue(self):
     #     executor = futures.ThreadPoolExecutor(max_workers=2)

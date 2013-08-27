@@ -21,6 +21,7 @@ from parsers import registry
 
 
 define("port", default=8000, help="run on the given port", type=int)
+define("address", default='127.0.0.1', help="run on the given host address", type=str)
 static_root = os.path.join(os.path.dirname(__file__), '..', 'static')
 template_root = os.path.join(os.path.dirname(__file__), '..', 'templates')
 
@@ -60,5 +61,5 @@ app = tornado.web.Application(handlers=[
 if __name__ == '__main__':
     tornado.options.parse_command_line()
     http_server = tornado.httpserver.HTTPServer(app)
-    http_server.listen(options.port)
+    http_server.listen(options.port, options.address)
     tornado.ioloop.IOLoop.instance().start()

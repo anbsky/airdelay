@@ -257,23 +257,24 @@ class BaseParser(object):
         executor = futures.ThreadPoolExecutor(max_workers=6)
         session = FuturesSession(executor)
         session.headers.update(self.get_request_headers())
-        getter = partial(session.request, 'get',
-                         background_callback=lambda s, r: self.parse_html(r))
+        # getter = partial(session.request, 'get',
+        #                  background_callback=lambda s, r: self.parse_html(r))
 
         if isinstance(self.url, dict):
             for _type, url in self.url.items():
                 if isinstance(url, (list, tuple)):
                     for _url in url:
-                        # fetcher = executor.submit(self.fetch_url, _url, sleep=True)
+                        fetcher = executor.submit(self.fetch_url, _url, sleep=False)
                         # fetcher = session.request('get', _url, background_callback=lambda r: self.parse_html(r.content))
-                        fetcher = getter(url=_url)
+                        # fetcher = getter(url=_url)
                         fetchers[fetcher] = _type
                 else:
-                    fetcher = getter(url=url)
+                    # fetcher = getter(url=url)
+                    fetcher = executor.submit(self.fetch_url, url, sleep=False)
                     fetchers[fetcher] = _type
                 # time.sleep(self.delay)
         else:
-            fetchers[getter(url=self.url)] = 'all'
+            fetchers[executor.submit(self.fetch_url, self.url, sleep=False)] = 'all'
 
         parsers = [executor.submit(self.parse_async, fetcher.result(), type=fetchers[fetcher])
                    for fetcher in futures.as_completed(fetchers)]

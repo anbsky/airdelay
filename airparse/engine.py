@@ -193,7 +193,6 @@ class BaseParser(object):
         self.delay = delay
         self.iata_code = iata_code
         self.name = find_airport_name(iata_code)
-        self._session = FuturesSession()
 
         self.metadata = {
             'status': None,
@@ -215,10 +214,6 @@ class BaseParser(object):
 
     def fetch_url(self, url):
         return requests.get(url, headers=self.get_request_headers())
-
-    def fetch_url_async(self, url, sleep=False):
-        if sleep: self.sleep()
-        return self._session.get(url, headers=self.get_request_headers())
 
     def parse_html(self, response):
         # Tornado Async client or Requests or just plain html

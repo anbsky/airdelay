@@ -269,14 +269,18 @@ class BaseParser(object):
         return self.records
 
     def run_async(self):
-        with futures.ThreadPoolExecutor(max_workers=2) as executor:
-            cache_hit = executor.submit(self.records.load_from_cache)
-            if not cache_hit.result():
-                future_results = executor.submit(self.get_async_results, self.get_async_parsers())
-                future_results.add_done_callback(lambda f: self.records.save_to_cache())
-                return future_results
-            else:
-                return executor.submit(self.get_async_results)
+        def results_retrieval():
+            with futures.ThreadPoolExecutor(max_workers=2) as executor:
+                cache_hit = executor.submit(self.records.load_from_cache)
+                if not cache_hit.result():
+                    future_results = executor.submit(self.get_async_results, self.get_async_parsers())
+                    future_results.add_done_callback(lambda f: self.records.save_to_cache())
+                    return future_results.result()
+                else:
+                    return self.get_async_results()
+
+        with futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(results_retrieval)
 
     def parse(self, content, **defaults):
         raise NotImplementedError
